@@ -34,4 +34,8 @@ pub enum CpalError {
     /// No candidate lines were supplied to inspect.
     #[error("no lines to inspect")]
     NoLines,
+
+    /// The key to a repeating-key operation has no bytes.
+    #[error("key has no bytes")]
+    EmptyKey,
 }
