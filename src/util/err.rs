@@ -22,4 +22,16 @@ pub enum CpalError {
         /// Length of the second input.
         b: usize,
     },
+
+    /// A character that is not in the base64 alphabet (`A-Z a-z 0-9 + /`).
+    #[error("invalid base64 character '{0}'")]
+    InvalidBase64Char(char),
+
+    /// A base64 string whose length or padding is structurally invalid.
+    #[error("invalid base64 length {0}")]
+    InvalidBase64Length(usize),
+
+    /// No candidate lines were supplied to inspect.
+    #[error("no lines to inspect")]
+    NoLines,
 }

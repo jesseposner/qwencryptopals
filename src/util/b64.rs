@@ -1,4 +1,6 @@
-//! Base64 (RFC 4640) encode — a transport/pretty-print layer over raw bytes.
+//! Base64 (RFC 4640) encode and decode — a transport/pretty-print layer over raw bytes.
+
+use crate::util::err::CpalError;
 
 /// Standard base64 alphabet, RFC 4640 §4: `A-Z a-z 0-9 + /`.
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -45,6 +47,63 @@ pub fn b64_encode(input: &[u8]) -> String {
         }
     }
     out
+}
+
+/// Decode a base64 string (RFC 4640, standard alphabet, `=` padding) to raw bytes.
+///
+/// A transport/pretty-print layer; the cryptography operates on the raw bytes returned.
+/// Surrounding whitespace (including a trailing newline) is ignored.
+///
+/// # Errors
+///
+/// - [`CpalError::InvalidBase64Length`] if the length is not a multiple of four, or the
+///   padding is not a trailing run of at most two `=` characters.
+/// - [`CpalError::InvalidBase64Char`] if a character is not in the base64 alphabet.
+///
+/// # Examples
+///
+/// ```
+/// assert_eq!(cryptopals::util::b64::b64_decode("YWJj"), Ok(b"abc".to_vec()));
+/// ```
+pub fn b64_decode(input: &str) -> Result<Vec<u8>, CpalError> {
+    let input = input.trim();
+    let len = input.len();
+    if len == 0 {
+        return Ok(Vec::new());
+    }
+    if !len.is_multiple_of(4) {
+        return Err(CpalError::InvalidBase64Length(len));
+    }
+
+    let bytes = input.as_bytes();
+    let pad = bytes.iter().rev().take_while(|c| **c == b'=').count();
+    if pad > 2 || bytes[..len - pad].contains(&b'=') {
+        return Err(CpalError::InvalidBase64Length(len));
+    }
+
+    // Padding sextets decode to zero; decode every group then truncate to the true length.
+    let out_len = (len - pad) * 3 / 4;
+    let mut out = Vec::with_capacity(out_len);
+    for group in bytes.chunks(4) {
+        let mut n: u32 = 0;
+        for c in group {
+            let v = match c {
+                b'A'..=b'Z' => u32::from(*c - b'A'),
+                b'a'..=b'z' => u32::from(*c - b'a') + 26,
+                b'0'..=b'9' => u32::from(*c - b'0') + 52,
+                b'+' => 62,
+                b'/' => 63,
+                b'=' => 0,
+                _ => return Err(CpalError::InvalidBase64Char(*c as char)),
+            };
+            n = (n << 6) | v;
+        }
+        out.push(((n >> 16) & 0xff) as u8);
+        out.push(((n >> 8) & 0xff) as u8);
+        out.push((n & 0xff) as u8);
+    }
+    out.truncate(out_len);
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -101,6 +160,66 @@ mod b64_encode {
                 let padding = "=".repeat(expected_pad);
                 prop_assert!(enc.ends_with(padding.as_str()));
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod b64_decode {
+    use super::*;
+
+    use proptest::prelude::*;
+
+    #[test]
+    fn decodes_a_full_three_byte_block() {
+        assert_eq!(b64_decode("YWJj"), Ok(b"abc".to_vec()));
+    }
+
+    #[test]
+    fn decodes_a_two_byte_input() {
+        assert_eq!(b64_decode("YWI="), Ok(b"ab".to_vec()));
+    }
+
+    #[test]
+    fn decodes_a_one_byte_input() {
+        assert_eq!(b64_decode("YQ=="), Ok(b"a".to_vec()));
+    }
+
+    #[test]
+    fn decodes_an_empty_string_to_an_empty_vec() {
+        assert_eq!(b64_decode(""), Ok(Vec::new()));
+    }
+
+    #[test]
+    fn ignores_surrounding_whitespace() {
+        assert_eq!(b64_decode("  YWJj\n"), Ok(b"abc".to_vec()));
+    }
+
+    #[test]
+    fn rejects_a_length_not_multiple_of_four() {
+        assert_eq!(b64_decode("YWJjZ"), Err(CpalError::InvalidBase64Length(5)));
+    }
+
+    #[test]
+    fn rejects_a_character_outside_the_alphabet() {
+        assert_eq!(b64_decode("YWJ!"), Err(CpalError::InvalidBase64Char('!')));
+    }
+
+    #[test]
+    fn rejects_padding_that_is_not_at_the_end() {
+        assert_eq!(b64_decode("YW=Jjg"), Err(CpalError::InvalidBase64Length(6)));
+    }
+
+    #[test]
+    fn rejects_more_than_two_trailing_pad_chars() {
+        assert_eq!(b64_decode("Y==="), Err(CpalError::InvalidBase64Length(4)));
+    }
+
+    proptest! {
+        #[test]
+        fn decoding_an_encoding_recovers_the_input(input in any::<Vec<u8>>()) {
+            let enc = b64_encode(&input);
+            prop_assert_eq!(b64_decode(&enc), Ok(input));
         }
     }
 }
