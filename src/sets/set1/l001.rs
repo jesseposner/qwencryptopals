@@ -8,13 +8,17 @@ use crate::util::err::CpalError;
 use crate::util::hex;
 
 /// Solve Level 1: decode the input hex, then re-encode those bytes as base64.
+///
+/// # Errors
+///
+/// Propagates the errors from [`crate::util::hex::from_hex`].
 pub fn solve(input_hex: &str) -> Result<String, CpalError> {
     let bytes = hex::from_hex(input_hex)?;
     Ok(b64::b64_encode(&bytes))
 }
 
 #[cfg(test)]
-mod tests {
+mod solve {
     use super::*;
 
     const INPUT_HEX: &str =
@@ -22,7 +26,7 @@ mod tests {
     const EXPECTED_B64: &str = "SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t";
 
     #[test]
-    fn solves_level_one() {
+    fn produces_the_official_base64_for_the_level_one_vector() {
         let got = solve(INPUT_HEX).expect("valid input must not error");
         assert_eq!(got, EXPECTED_B64);
     }

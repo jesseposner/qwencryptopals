@@ -1,18 +1,24 @@
-/// Encode raw bytes as base64 (RFC 4640, standard alphabet, `=` padding).
-///
-/// base64 is only a transport/pretty-print layer; the cryptography operates on
-/// the raw bytes passed in.
-/// Standard base64 alphabet, RFC 4640 §4: A-Z a-z 0-9 + /
+/// Standard base64 alphabet, RFC 4640 §4: `A-Z a-z 0-9 + /`.
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+/// Encode raw bytes as base64 (RFC 4640, standard alphabet, `=` padding).
+///
+/// Base64 is only a transport/pretty-print layer; the cryptography operates on
+/// the raw bytes passed in.
+///
+/// # Examples
+///
+/// ```
+/// assert_eq!(cryptopals::util::b64::b64_encode(b"abc"), "YWJj");
+/// ```
 pub fn b64_encode(input: &[u8]) -> String {
-    // Output length is always a multiple of 4, at most ceil(input/3) groups.
+    // Output is a multiple of 4 chars across ceil(input/3) groups.
     let mut out = String::with_capacity((input.len() / 3 + 1) * 4);
 
     for chunk in input.chunks(3) {
-        let b0 = chunk[0] as u32;
-        let b1 = chunk.get(1).copied().unwrap_or(0) as u32;
-        let b2 = chunk.get(2).copied().unwrap_or(0) as u32;
+        let b0 = u32::from(chunk[0]);
+        let b1 = u32::from(chunk.get(1).copied().unwrap_or(0));
+        let b2 = u32::from(chunk.get(2).copied().unwrap_or(0));
         let n = (b0 << 16) | (b1 << 8) | b2;
 
         let i0 = (n >> 18 & 0x3f) as usize;
@@ -25,8 +31,7 @@ pub fn b64_encode(input: &[u8]) -> String {
         out.push(ALPHABET[i2] as char);
         out.push(ALPHABET[i3] as char);
 
-        // 3 bytes -> full 4 symbols; 2 bytes -> drop the last symbol, pad one;
-        // 1 byte -> drop the last two symbols, pad twice.
+        // 3 bytes -> full 4 symbols; 2 bytes -> pad one; 1 byte -> pad twice.
         if chunk.len() == 1 {
             out.pop();
             out.pop();
@@ -41,26 +46,26 @@ pub fn b64_encode(input: &[u8]) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+mod b64_encode {
     use super::*;
 
     #[test]
-    fn empty() {
+    fn encodes_an_empty_input_to_an_empty_string() {
         assert_eq!(b64_encode(&[]), "");
     }
 
     #[test]
-    fn no_padding_three_bytes() {
+    fn encodes_a_full_three_byte_block_with_no_padding() {
         assert_eq!(b64_encode("abc".as_bytes()), "YWJj");
     }
 
     #[test]
-    fn single_pad_two_bytes() {
+    fn pads_a_two_byte_input_with_one_eq_char() {
         assert_eq!(b64_encode("ab".as_bytes()), "YWI=");
     }
 
     #[test]
-    fn double_pad_one_byte() {
+    fn pads_a_one_byte_input_with_two_eq_chars() {
         assert_eq!(b64_encode("a".as_bytes()), "YQ==");
     }
 }
