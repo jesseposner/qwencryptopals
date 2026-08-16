@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Annotated walkthrough of all eight Cryptopals Set 1 challenges, wired to the actual Rust code in the qwencryptopals crate.">
+<meta name="color-scheme" content="dark">
+<title>Cryptopals Set 1 · Annotated Walkthrough</title>
+<style>
+:root{
+  --bg:#0f172a; --bg-2:#0b1120; --panel:#1e293b; --panel-2:#16202f;
+  --code-bg:#0a0f1c; --fg:#f8fafc; --fg-dim:#cbd5e1; --muted:#94a3b8;
+  --border:#334155; --border-soft:#20304a;
+  --accent:#22c55e; --accent-2:#4ade80; --accent-dim:rgba(34,197,94,.14); --accent-line:rgba(34,197,94,.45);
+  --amber:#f59e0b; --red:#ef4444; --topbar-h:56px; --maxw:1160px;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,system-ui,sans-serif;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,"Cascadia Code","Roboto Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:radial-gradient(1200px 600px at 80% -10%, rgba(34,197,94,.06), transparent 60%), var(--bg);
+  color:var(--fg); font:400 16px/1.65 var(--sans);
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+a{color:var(--accent-2);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:var(--mono);font-size:.9em}
+::selection{background:rgba(34,197,94,.28)}
+:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px;border-radius:3px}
+
+.topbar{
+  position:sticky;top:0;z-index:50;height:var(--topbar-h);
+  display:flex;align-items:center;gap:14px;padding:0 22px;
+  background:rgba(11,17,32,.86); backdrop-filter:saturate(140%) blur(8px);
+  border-bottom:1px solid var(--border-soft);
+}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:.2px}
+.brand .dot{width:18px;height:18px;border-radius:5px;
+  background:linear-gradient(135deg,var(--accent-2),var(--accent));
+  box-shadow:0 0 0 3px var(--accent-dim);}
+.brand small{color:var(--muted);font-weight:500;font-size:13px}
+.topbar .run{margin-left:auto;font-family:var(--mono);font-size:12.5px;color:var(--muted);
+  border:1px solid var(--border-soft);border-radius:999px;padding:5px 12px;
+  background:var(--panel-2);white-space:nowrap;}
+.topbar .run b{color:var(--accent-2);font-weight:600}
+
+.hero{max-width:var(--maxw);margin:0 auto;padding:52px 24px 18px}
+.hero .kicker{font-family:var(--mono);font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--accent-2);margin:0 0 14px;}
+.hero h1{margin:0 0 14px;font-size:clamp(1.9rem,4.6vw,3rem);line-height:1.05;font-weight:700;letter-spacing:-.02em}
+.hero .lead{max-width:64ch;color:var(--fg-dim);font-size:clamp(1rem,1.5vw,1.15rem);margin:0 0 22px}
+.pills{display:flex;flex-wrap:wrap;gap:9px}
+.pill{font-family:var(--mono);font-size:12.5px;color:var(--fg-dim);
+  border:1px solid var(--border);border-radius:999px;padding:5px 12px;background:var(--panel-2)}
+.pill b{color:var(--fg)} .pill.g b{color:var(--accent-2)}
+
+.grid{max-width:var(--maxw);margin:0 auto;padding:8px 24px 40px;
+  display:grid;grid-template-columns:232px minmax(0,1fr);gap:44px;align-items:start;}
+main{min-width:0}
+
+.toc{position:sticky;top:calc(var(--topbar-h) + 22px)}
+.toc .toc-title{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 10px 4px;}
+.toc-list{list-style:none;margin:0;padding:0;border-left:1px solid var(--border-soft)}
+.toc-list a{display:block;padding:7px 12px;margin-left:-1px;color:var(--fg-dim);
+  border-left:2px solid transparent;font-size:14px;cursor:pointer;
+  transition:color .18s ease,border-color .18s ease,background .18s ease;}
+.toc-list a .n{font-family:var(--mono);font-size:11px;color:var(--muted);display:inline-block;width:22px}
+.toc-list a:hover{color:var(--fg);background:var(--accent-dim);text-decoration:none}
+.toc-list a.active{color:var(--accent-2);border-left-color:var(--accent);
+  background:linear-gradient(90deg,var(--accent-dim),transparent);}
+
+section.block{scroll-margin-top:calc(var(--topbar-h) + 20px)}
+.challenge{scroll-margin-top:calc(var(--topbar-h) + 20px);
+  padding:40px 0 8px;border-top:1px solid var(--border-soft);}
+.challenge:first-of-type{border-top:none;padding-top:6px}
+.ch-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.ch-num{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--bg);
+  background:linear-gradient(135deg,var(--accent-2),var(--accent));
+  padding:6px 9px;border-radius:8px;
+  box-shadow:0 1px 0 rgba(0,0,0,.4),0 0 0 3px var(--accent-dim);}
+.ch-num.alt{background:linear-gradient(135deg,#fbbf24,var(--amber));color:#1c1205;box-shadow:0 0 0 3px rgba(245,158,11,.16)}
+.ch-top h2{margin:0;font-size:clamp(1.35rem,2.6vw,1.7rem);font-weight:600;letter-spacing:-.01em;flex:1;min-width:200px}
+.chip{font-family:var(--mono);font-size:12px;color:var(--fg-dim);
+  border:1px solid var(--border);border-radius:999px;padding:5px 11px;background:var(--panel-2);white-space:nowrap}
+
+h3{font-family:var(--mono);font-size:12px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--accent-2);margin:26px 0 10px;font-weight:600}
+p{margin:0 0 12px;max-width:70ch}
+p strong{color:var(--fg)}
+ul,ol{margin:0 0 12px;padding-left:22px;max-width:68ch}
+li{margin:4px 0}
+
+.card{background:linear-gradient(180deg,var(--panel),var(--panel-2));
+  border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin:8px 0 14px}
+.card-label{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);display:block;margin-bottom:8px}
+.card.problem{border-left:3px solid var(--accent-line)}
+.card.problem p{margin:0;color:var(--fg-dim)}
+.card.problem .official{color:var(--fg)}
+
+.insight{margin:14px 0;padding:14px 16px;border-radius:10px;
+  background:var(--accent-dim);border:1px solid var(--accent-line);max-width:70ch}
+.insight .tag{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--accent-2);display:block;margin-bottom:6px}
+.insight p{margin:0;color:var(--fg)}
+.insight code{color:var(--accent-2);background:rgba(0,0,0,.25)}
+
+.code-wrap{position:relative;margin:2px 0 6px}
+.code-wrap pre{margin:0;background:var(--code-bg);border:1px solid var(--border);
+  border-radius:12px;padding:16px 18px;overflow:auto}
+.code-wrap code{font-family:var(--mono);font-size:13.5px;line-height:1.6;color:#e6edf7;white-space:pre}
+.copy{position:absolute;top:9px;right:9px;z-index:2;
+  font:600 11.5px var(--mono);letter-spacing:.04em;color:var(--muted);
+  background:var(--panel-2);border:1px solid var(--border);border-radius:8px;
+  padding:5px 9px;cursor:pointer;opacity:0;transition:opacity .15s ease,color .15s ease,border-color .15s ease}
+.code-wrap:hover .copy,.copy:focus-visible{opacity:1}
+.copy:hover,.copy.ok{color:var(--accent-2);border-color:var(--accent-line)}
+
+.notes{list-style:none;margin:4px 0 0;padding:0}
+.notes li{position:relative;padding-left:22px;color:var(--fg-dim);margin:6px 0;max-width:72ch}
+.notes li::before{content:"";position:absolute;left:2px;top:9px;width:6px;height:6px;border-radius:50%;
+  background:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
+.notes li code{color:var(--accent-2)}
+
+details.support{margin:6px 0 14px;max-width:74ch}
+details.support summary{cursor:pointer;list-style:none;font-family:var(--mono);font-size:13px;color:var(--fg-dim);
+  border:1px solid var(--border-soft);border-radius:10px;padding:10px 14px;background:var(--panel-2);
+  transition:border-color .18s ease,color .18s ease;display:flex;align-items:center;gap:9px}
+details.support summary::-webkit-details-marker{display:none}
+details.support summary::before{content:"+";color:var(--accent-2);font-weight:700;width:12px;display:inline-block}
+details.support[open] summary::before{content:"–"}
+details.support summary:hover{border-color:var(--border);color:var(--fg)}
+details.support[open] summary{color:var(--fg);border-color:var(--border)}
+details.support .body{padding:12px 4px 2px}
+details.support .body p{color:var(--muted);font-size:14.5px;margin:0 0 10px}
+
+.ex,.io{max-width:74ch;display:flex;flex-direction:column}
+.ex-row,.io-row{display:grid;grid-template-columns:132px 1fr;gap:14px;align-items:baseline;
+  padding:9px 2px;border-bottom:1px dashed var(--border-soft)}
+.ex-row:last-child,.io-row:last-child{border-bottom:none}
+.ex-k,.io-k{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
+.io-k.in{color:var(--amber)} .io-k.out{color:var(--accent-2)}
+.ex-row code,.io-row code{white-space:pre-wrap;word-break:break-word;color:var(--fg-dim);
+  background:var(--code-bg);border:1px solid var(--border-soft);border-radius:8px;padding:6px 10px;font-size:13px;line-height:1.5}
+.ex-row.out code{color:var(--accent-2);border-color:var(--accent-line)}
+.ex-note{color:var(--muted);font-size:13.5px;margin:8px 0 0;max-width:72ch}
+
+.files{margin-top:18px;color:var(--muted);font-size:13px;max-width:74ch;line-height:1.7}
+.files strong{color:var(--fg-dim);font-weight:600}
+.files code{color:var(--accent-2);background:var(--panel-2);border:1px solid var(--border-soft);border-radius:6px;padding:2px 7px;font-size:12.5px}
+.files .sep{color:var(--border);margin:0 6px}
+
+.blocks-table,.err-table{border:1px solid var(--border);border-radius:12px;overflow:hidden;max-width:74ch}
+.blocks-table .row{display:grid;grid-template-columns:150px 1fr;border-bottom:1px solid var(--border-soft)}
+.blocks-table .row:last-child{border-bottom:none}
+.blocks-table .mod{padding:11px 14px;background:var(--panel-2);font-family:var(--mono);font-size:13px;
+  color:var(--accent-2);border-right:1px solid var(--border-soft)}
+.blocks-table .desc{padding:11px 14px;font-size:14px;color:var(--fg-dim)}
+.blocks-table .desc .lvl{color:var(--muted);font-family:var(--mono);font-size:12px}
+.err-table .row{display:grid;grid-template-columns:230px 1fr;border-bottom:1px solid var(--border-soft)}
+.err-table .row:last-child{border-bottom:none}
+.err-table .v{padding:10px 14px;background:var(--panel-2);font-family:var(--mono);font-size:12.5px;color:var(--fg-dim);border-right:1px solid var(--border-soft)}
+.err-table .m{padding:10px 14px;font-size:13.5px;color:var(--muted)}
+
+footer{border-top:1px solid var(--border);margin-top:20px;padding:26px 0 8px;color:var(--muted);font-size:13.5px;max-width:74ch}
+footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-2);margin:0 0 8px}
+
+@media (max-width:860px){
+  .grid{grid-template-columns:1fr;gap:0;padding-bottom:24px}
+  .toc{position:sticky;top:var(--topbar-h);z-index:40;background:var(--bg);margin:0 -24px;padding:10px 0;border-bottom:1px solid var(--border-soft)}
+  .toc .toc-title{display:none}
+  .toc-list{border-left:none;display:flex;gap:6px;overflow-x:auto;padding:0 20px}
+  .toc-list a{white-space:nowrap;border:1px solid var(--border-soft);border-radius:999px;padding:6px 13px;font-size:13px;background:var(--panel-2)}
+  .toc-list a .n{width:auto;margin-right:4px}
+  .toc-list a.active{border-color:var(--accent-line);background:var(--accent-dim)}
+  .hero{padding-top:34px}
+  .challenge{padding:30px 0 4px}
+}
+@media (max-width:480px){
+  .topbar .run{display:none}
+  .ex-row,.io-row{grid-template-columns:1fr;gap:4px}
+  .ex-k,.io-k{margin-bottom:2px}
+  .blocks-table .row,.err-table .row{grid-template-columns:1fr}
+  .blocks-table .mod,.err-table .v{border-right:none;border-bottom:1px solid var(--border-soft)}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  .toc-list a,.copy,details.support summary{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Set 1</small></div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 71 unit + 6 doc tests</div>
+</div>
+
+<header class="hero">
+  <p class="kicker">Cryptopals · Set 1 · The Byte, String &amp; Stream Ciphers</p>
+  <h1>Set 1, Levels 1–8 — annotated walkthrough</h1>
+  <p class="lead">
+    Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
+    the idea, the solver, a worked example with real values, and the official Cryptopals
+    input/output. It is a single self-contained page — no build step, no network — so just open
+    <code>docs/index.html</code> in a browser.
+  </p>
+  <div class="pills">
+    <span class="pill g"><b>8</b> levels</span>
+    <span class="pill"><b>71</b> unit + <b>6</b> doc tests</span>
+    <span class="pill">incl. property-based (proptest)</span>
+    <span class="pill">6 shared <b>util</b> modules</span>
+    <span class="pill">L7 adds the <b>aes</b> crate</span>
+  </div>
+</header>
+
+<div class="grid">
+  <nav class="toc" aria-label="Table of contents">
+    <p class="toc-title">Contents</p>
+    <ul class="toc-list">
+      <li><a href="#intro"><span class="n">#</span>Reading guide</a></li>
+      <li><a href="#blocks"><span class="n">#</span>The building blocks</a></li>
+      <li><a href="#l1" data-toc><span class="n">L1</span>hex to base64</a></li>
+      <li><a href="#l2" data-toc><span class="n">L2</span>Fixed XOR</a></li>
+      <li><a href="#l3" data-toc><span class="n">L3</span>Single-byte XOR</a></li>
+      <li><a href="#l4" data-toc><span class="n">L4</span>Detect single-char XOR</a></li>
+      <li><a href="#l5" data-toc><span class="n">L5</span>Repeating-key XOR</a></li>
+      <li><a href="#l6" data-toc><span class="n">L6</span>Break repeating-key XOR</a></li>
+      <li><a href="#l7" data-toc><span class="n">L7</span>AES-128 ECB</a></li>
+      <li><a href="#l8" data-toc><span class="n">L8</span>Detect AES in ECB</a></li>
+      <li><a href="#errors"><span class="n">#</span>Error type</a></li>
+    </ul>
+  </nav>
+
+  <main>
+
+  <!-- Reading guide -->
+  <section id="intro" class="block">
+    <h2>How to read this page</h2>
+    <p>Every one of the eight levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <ul>
+      <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
+      <li><strong>The idea</strong> — the single concept the level is really testing.</li>
+      <li><strong>The code</strong> — the actual <code>solve</code> from this crate. The shared helpers it calls are in a collapsible <em>supporting code</em> panel, quoted from <code>src/util/</code>.</li>
+      <li><strong>Worked example</strong> — a few real bytes, by hand, so you can watch it happen.</li>
+      <li><strong>Official I/O</strong> — the exact inputs and outputs the tests assert against.</li>
+    </ul>
+    <p>The library is <code>src/lib.rs</code>; the challenges live in <code>src/sets/set1/</code> and the reusable helpers in <code>src/util/</code>. The test suite is the definition of "done".</p>
+    <ul class="notes">
+      <li>The trusted gate (fmt + test + clippy) is <code>just gate</code>. Run one level's own tests with <code>just lvl set1 l003</code>.</li>
+      <li><code>L1</code>–<code>L6</code> are hand-rolled in <code>src/util/</code> on raw bytes. <code>L7</code> pulls in the <code>aes</code> crate for AES-128 itself; <code>L8</code> just reuses <code>util::hex</code>.</li>
+    </ul>
+  </section>
+
+  <!-- Building blocks -->
+  <section id="blocks" class="block">
+    <h2>The building blocks</h2>
+    <p>Six small modules in <code>src/util/</code> carry almost all of the work; each <code>solve</code> is then mostly glue. All of them operate on raw bytes — hex and base64 are only transport.</p>
+    <div class="blocks-table">
+      <div class="row"><div class="mod">util::hex</div><div class="desc"><code>from_hex</code>: hex to <code>Vec&lt;u8&gt;</code>. The test oracles also hand-format bytes back to hex. <span class="lvl">· L1 · L2 · L3 · L4 · L5 · L8</span></div></div>
+      <div class="row"><div class="mod">util::b64</div><div class="desc">hand-rolled RFC 4640 <code>b64_encode</code> and <code>b64_decode</code>. <span class="lvl">· L1 · L6 · L7</span></div></div>
+      <div class="row"><div class="mod">util::xor</div><div class="desc"><code>xor</code> (equal-length) and <code>xore</code> (repeating-key, cycles from the start). <span class="lvl">· L2 · L5 · L6</span></div></div>
+      <div class="row"><div class="mod">util::freq</div><div class="desc"><code>english_score</code> and <code>best_single_byte_key</code> — the single-byte XOR attack. <span class="lvl">· L3 · L4 · L6</span></div></div>
+      <div class="row"><div class="mod">util::entropy</div><div class="desc"><code>normalized_shannon_entropy</code>, in <code>[0,1]</code>; the key-length estimator. <span class="lvl">· L6</span></div></div>
+      <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
+    </div>
+  </section>
+
+  <!-- L1 -->
+  <section id="l1" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L1</span>
+      <h2>Hex to base64</h2>
+      <span class="chip">set1::l001</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Convert a given hex blob to base64. You are handed <code>49276d…757368726f6f6d</code> and it must come out as <code>SSdt…c2hyb29t</code>.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>Hex and base64 are two spellings of the same bytes. Decode the hex to raw bytes, then re-encode those very same bytes as base64. No cryptography is involved — the discipline is simply to never "convert hex to base64" directly; the bytes in the middle are the thing.</p>
+    <div class="insight"><span class="tag">Core move</span><p><code>hex::from_hex(…)</code> hands you a <code>Vec&lt;u8&gt;</code>; <code>b64::b64_encode(&amp;…)</code> re-spells it. The encodings are transport; the bytes are data.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::b64;
+use crate::util::hex;
+
+pub fn solve(input_hex: &amp;str) -&gt; Result&lt;String, CpalError&gt; {
+    let bytes = hex::from_hex(input_hex)?;
+    Ok(b64::b64_encode(&amp;bytes))
+}</code></pre></div>
+    <ul class="notes">
+      <li>The <code>?</code> forwards any <code>from_hex</code> failure (odd length or a non-hex digit) up to the caller.</li>
+    </ul>
+    <details class="support" open>
+      <summary>supporting code · util/b64.rs — b64_encode</summary>
+      <div class="body">
+        <p>Three input bytes become one 24-bit number, split into four 6-bit indexes into the alphabet; a short final chunk produces <code>=</code> padding.</p>
+        <div class="code-wrap"><pre><code>pub fn b64_encode(input: &amp;[u8]) -&gt; String {
+    let mut out = String::with_capacity((input.len() / 3 + 1) * 4);
+
+    for chunk in input.chunks(3) {
+        let b0 = u32::from(chunk[0]);
+        let b1 = u32::from(chunk.get(1).copied().unwrap_or(0));
+        let b2 = u32::from(chunk.get(2).copied().unwrap_or(0));
+        let n = (b0 &lt;&lt; 16) | (b1 &lt;&lt; 8) | b2;
+
+        let i0 = (n &gt;&gt; 18 &amp; 0x3f) as usize;
+        let i1 = (n &gt;&gt; 12 &amp; 0x3f) as usize;
+        let i2 = (n &gt;&gt; 6 &amp; 0x3f) as usize;
+        let i3 = (n &amp; 0x3f) as usize;
+
+        out.push(ALPHABET[i0] as char);
+        out.push(ALPHABET[i1] as char);
+        out.push(ALPHABET[i2] as char);
+        out.push(ALPHABET[i3] as char);
+
+        if chunk.len() == 1 {
+            out.pop(); out.pop(); out.push('='); out.push('=');
+        } else if chunk.len() == 2 {
+            out.pop(); out.push('=');
+        }
+    }
+    out
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">first 3 bytes</span><code>49 27 6d  (hex)  =  "I'm"</code></div>
+      <div class="ex-row"><span class="ex-k">those as base64</span><code>"I'm"  →  SSdt</code></div>
+      <div class="ex-row out"><span class="ex-k">full result</span><code>SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input (hex)</span><code>49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l001.rs</code><span class="sep">·</span> helpers <code>util/hex.rs</code>, <code>util/b64.rs</code><span class="sep">·</span> test: <code>mod solve</code> (1 unit)</p>
+  </section>
+
+  <!-- L2 -->
+  <section id="l2" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L2</span>
+      <h2>Fixed XOR</h2>
+      <span class="chip">set1::l002</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">XOR two equal-length buffers, byte for byte. Both are given in hex: <code>1c01…181c</code> and <code>6869…7965</code>. Produce the result.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>Decode both to bytes and XOR them positionally: <code>a[i] ^ b[i]</code>. XOR is its own inverse and is commutative, which is exactly why it is the workhorse of ciphers. The result is a <code>Vec&lt;u8&gt;</code>; hex is just how the test prints it.</p>
+    <div class="insight"><span class="tag">Core move</span><p>One expression: <code>a.iter().zip(b).map(|(&amp;x, &amp;y)| x ^ y)</code>. The only failure mode is a length mismatch.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::hex;
+use crate::util::xor;
+
+pub fn solve(a_hex: &amp;str, b_hex: &amp;str) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let a = hex::from_hex(a_hex)?;
+    let b = hex::from_hex(b_hex)?;
+    xor::xor(&amp;a, &amp;b)
+}</code></pre></div>
+    <details class="support">
+      <summary>supporting code · util/xor.rs — xor</summary>
+      <div class="body">
+        <div class="code-wrap"><pre><code>pub fn xor(a: &amp;[u8], b: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    if a.len() != b.len() {
+        return Err(CpalError::LengthMismatch { a: a.len(), b: b.len() });
+    }
+    Ok(a.iter().zip(b).map(|(&amp;x, &amp;y)| x ^ y).collect())
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">byte 0</span><code>0x1c ^ 0x68 = 0x74 = "t"</code></div>
+      <div class="ex-row"><span class="ex-k">byte 1</span><code>0x01 ^ 0x69 = 0x68 = "h"</code></div>
+      <div class="ex-row out"><span class="ex-k">full result</span><code>"the kid didn't play"  →  746865206b696420646f6e277420706c6179</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">a</span><code>1c0111001f010100061a024b53535009181c</code></div>
+      <div class="io-row"><span class="io-k in">b</span><code>686974207468652062756c6c277320657965</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>746865206b696420646f6e277420706c6179</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l002.rs</code><span class="sep">·</span> helper <code>util/xor.rs</code><span class="sep">·</span> test: <code>mod solve</code> (1 unit)</p>
+  </section>
+  <!-- L3 -->
+  <section id="l3" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L3</span>
+      <h2>Single-byte XOR</h2>
+      <span class="chip">set1::l003</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">The message has been XOR'd against a single character. Decrypt it. You'll know you've succeeded when the plaintext reads like meaningful English. The ciphertext is given in hex: <code>1b37…3736</code>.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>With a single repeated key byte you only have to test 256 candidates. Decrypt against each candidate, score the result for English-likeness, and keep the best. Scoring is <code>util::freq::english_score</code> — a weighted count of lowercase letters and spaces using relative English letter frequencies. Real English is letter-dense, so true plaintext scores far above a wrongly de-keyed (mostly high-bit) buffer. <code>best_single_byte_key</code> runs all 256 and returns the argmax.</p>
+    <div class="insight"><span class="tag">Core move</span><p>For every <code>k</code> from <code>0…255</code> compute <code>score(ct ^ k)</code>; the winner is the key. <code>best_single_byte_key</code> hides the loop.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::err::CpalError;
+use crate::util::freq;
+use crate::util::hex;
+
+pub fn solve(cipher_hex: &amp;str) -&gt; Result&lt;(u8, Vec&lt;u8&gt;), CpalError&gt; {
+    let ct = hex::from_hex(cipher_hex)?;
+    let (key, plain) = freq::best_single_byte_key(&amp;ct);
+    Ok((key, plain))
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>best_single_byte_key</code> never errors — it always returns the argmax — so the only <code>CpalError</code> path here is the hex decode.</li>
+      <li><code>key</code> is the byte and <code>plain</code> the decrypted <code>Vec&lt;u8&gt;</code>; the test asserts the exact plaintext.</li>
+    </ul>
+    <details class="support">
+      <summary>supporting code · util/freq.rs — english_score + best_single_byte_key</summary>
+      <div class="body">
+        <div class="code-wrap"><pre><code>pub fn english_score(data: &amp;[u8]) -&gt; u32 {
+    const FREQ: [u32; 26] = [
+        8, 1, 3, 5, 12, 2, 2, 5, 7, 1, 1, 4, 2, 7, 9, 2, 1, 6, 9, 10, 4, 1, 1, 2, 2, 1,
+    ];
+    let mut total = 0u32;
+    for &amp;b in data {
+        match b {
+            b'a'..=b'z' =&gt; total += FREQ[(b - b'a') as usize],
+            b' ' =&gt; total += 15,
+            _ =&gt; {}
+        }
+    }
+    total
+}
+
+pub fn best_single_byte_key(ciphertext: &amp;[u8]) -&gt; (u8, Vec&lt;u8&gt;) {
+    let mut best_key = 0u8;
+    let mut best_plain = ciphertext.to_vec();
+    let mut best_score = english_score(ciphertext);
+    for key in 1..=u8::MAX {
+        let plain: Vec&lt;u8&gt; = ciphertext.iter().map(|&amp;b| b ^ key).collect();
+        let score = english_score(&amp;plain);
+        if score &gt; best_score {
+            (best_key, best_plain, best_score) = (key, plain, score);
+        }
+    }
+    (best_key, best_plain)
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">winning key</span><code>0x58  (= 88  =  "X")</code></div>
+      <div class="ex-row"><span class="ex-k">first bytes</span><code>0x1b^0x58 = 0x43 "C" · 0x37^0x58 = 0x6f "o" · 0x37^0x58 = 0x6f "o"</code></div>
+      <div class="ex-row out"><span class="ex-k">full result</span><code>"Cooking MC's like a pound of bacon"</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input (hex)</span><code>1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>"Cooking MC's like a pound of bacon"</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l003.rs</code><span class="sep">·</span> helpers <code>util/hex.rs</code>, <code>util/freq.rs</code><span class="sep">·</span> tests: <code>mod solve</code> (unit + property oracle)</p>
+  </section>
+  <!-- L4 -->
+  <section id="l4" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L4</span>
+      <h2>Detect single-byte XOR</h2>
+      <span class="chip">set1::l004</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Write a function that takes a <em>hex string</em> (with one "single-char-xored" English line buried in it) and detects the line by brute-forcing all 256 characters on every line. There are no obvious boundaries between words, so don't worry about that here.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>Feed the exact L3 attack to <em>every</em> line, keep each line's best-decryption score <code>english_score</code>, and return the argmax line. The planted English line scores far above random noise no matter where it sits — <code>util::freq::best_single_byte_key</code> + <code>english_score</code> (both shown in L3) do the per-line work.</p>
+    <div class="insight"><span class="tag">Core move</span><p><code>for (i, line)</code> accumulate <code>(i, key, plain, score)</code>; keep the largest <code>score</code>. Exact ties are broken by "first" (later lines only replace on a strict <code>&gt;</code>).</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::err::CpalError;
+use crate::util::freq;
+use crate::util::hex;
+
+pub fn solve(lines: &amp;[&amp;str]) -&gt; Result&lt;(usize, u8, Vec&lt;u8&gt;), CpalError&gt; {
+    let mut best: Option&lt;(usize, u8, Vec&lt;u8&gt;, u32)&gt; = None;
+
+    for (i, line) in lines.iter().enumerate() {
+        let ct = hex::from_hex(line)?;
+        let (key, plain) = freq::best_single_byte_key(&amp;ct);
+        let score = freq::english_score(&amp;plain);
+        if best.as_ref().is_none_or(|b| score &gt; b.3) {
+            best = Some((i, key, plain, score));
+        }
+    }
+
+    match best {
+        Some((i, key, plain, _)) =&gt; Ok((i, key, plain)),
+        None =&gt; Err(CpalError::NoLines),
+    }
+}</code></pre></div>
+    <ul class="notes">
+      <li>The four-tuple carries <code>(index, key, plain, score)</code>; <code>score</code> is the discriminator and <code>index</code> the answer. <code>|b| score &gt; b.3</code> reaches the score field.</li>
+      <li><code>None</code> input is <code>NoLines</code>; an invalid hex digit on any line is surfaced by the hex decode.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">winning line</span><code>index 170  (0-based)  ·  key 0x35</code></div>
+      <div class="ex-row"><span class="ex-k">first bytes</span><code>0x7b^0x35 = 0x4e "N" · 0x5a^0x35 = 0x6f "o" · 0x42^0x35 = 0x77 "w"</code></div>
+      <div class="ex-row out"><span class="ex-k">full result</span><code>"Now that the party is jumping"</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input (dump)</span><code>data/challenge_04.txt · the planted line is row 170 (0-based): 7b5a4215415d544115415d5015455447414c155c46155f4058455c5b523f</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>key 0x35 · "Now that the party is jumping"</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l004.rs</code><span class="sep">·</span> helpers <code>util/hex.rs</code>, <code>util/freq.rs</code><span class="sep">·</span> tests: <code>mod solve</code> (3 unit + 1 property) + data file</p>
+  </section>
+
+  <!-- L5 -->
+  <section id="l5" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L5</span>
+      <h2>Repeating-key XOR</h2>
+      <span class="chip">set1::l005</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">XOR the following plaintext against the repeating key <code>494345</code>. It's a little long, but I expect you can do it without much trouble:</p>
+      <p class="official"><code>4275726e696e672027656d2c…</code>  ("Burning 'em, if you ain't quick and nimble&nbsp;\n&nbsp;I go crazy when I hear a cymbal")</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>L2's XOR is fixed-length; L5 generalizes it: cycle the key back to the start, so byte <code>i</code> of the plaintext meets key byte <code>i % key.len()</code>. This is the repeating-key XOR that L6's ciphertext was made with. The key <code>494345</code> decodes to <code>"ICE"</code> — but the code only sees three bytes.</p>
+    <div class="insight"><span class="tag">Core move</span><p><code>xor::xore</code>: <code>b ^ key[i % len]</code> for every byte <code>i</code>. One <code>%</code> is the whole trick; an empty key is the only error.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::err::CpalError;
+use crate::util::hex;
+use crate::util::xor;
+
+pub fn solve(plain_hex: &amp;str, key_hex: &amp;str) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let plain = hex::from_hex(plain_hex)?;
+    let key = hex::from_hex(key_hex)?;
+    xor::xore(&amp;plain, &amp;key)
+}</code></pre></div>
+    <details class="support">
+      <summary>supporting code · util/xor.rs — xore</summary>
+      <div class="body">
+        <p>Unlike <code>xor</code> (equal-length), the key repeats as far as needed to cover <code>plain</code>.</p>
+        <div class="code-wrap"><pre><code>pub fn xore(plain: &amp;[u8], key: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    if key.is_empty() {
+        return Err(CpalError::EmptyKey);
+    }
+    let len = key.len();
+    Ok(plain
+        .iter()
+        .enumerate()
+        .map(|(i, &amp;b)| b ^ key[i % len])
+        .collect())
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">key</span><code>0x494345  =  "ICE"</code></div>
+      <div class="ex-row"><span class="ex-k">first 3 bytes</span><code>0x42^0x49 = 0x0b · 0x75^0x43 = 0x36 · 0x72^0x45 = 0x37</code></div>
+      <div class="ex-row out"><span class="ex-k">full result (head)</span><code>0b3637 272a 2b2e …   "Bur"&nbsp;→&nbsp;ct starts 0b 36 37</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">plaintext (hex)</span><code>4275726e696e672027656d2c20696620796f752061696e277420717569636b20616e64206e696d626c650a4920676f206372617a79207768656e2049206865617220612063796d62616c</code></div>
+      <div class="io-row"><span class="io-k in">key (hex)</span><code>494345</code></div>
+      <div class="io-row"><span class="io-k out">ciphertext (hex)</span><code>0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l005.rs</code><span class="sep">·</span> helpers <code>util/hex.rs</code>, <code>util/xor.rs</code><span class="sep">·</span> tests: <code>mod solve</code> (2 unit) + 6 doc tests across <code>util::xor</code></p>
+  </section>
+  <!-- L6 -->
+  <section id="l6" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L6</span>
+      <h2>Break repeating-key XOR</h2>
+      <span class="chip">set1::l006</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Base64 the below before you start. Remember that the user's key was a repeating phrase, so if you can't get a reasonable plaintext, try different key lengths in the next step. Decrypt it!</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>Two questions: <em>how long is the key?</em> and <em>what is each byte of it?</em>. For the first, note that at the true key length the ciphertext splits into clean "columns" — column <code>c</code> holds plaintext bytes that all met key byte <code>c</code>, so each column is mostly English and has <em>low</em> normalized entropy. At any wrong length the columns interleave several key positions and spread out → higher entropy. <code>key_length</code> searches <code>2…MAX_KEY_LEN</code> and takes the candidate whose <em>weighted mean column entropy</em> is smallest. Once the length is known, each column is just a single-byte XOR problem, so <code>best_single_byte_key</code> (L3) recovers one key byte at a time.</p>
+    <div class="insight"><span class="tag">Core move</span><p>(1) minimize mean normalized entropy over column splits to find <code>key_len</code>; (2) per-column <code>best_single_byte_key</code>; (3) <code>xor::xore</code> to decrypt. Entropy is the length discriminator; frequency is the byte discriminator.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::b64;
+use crate::util::entropy;
+use crate::util::err::CpalError;
+use crate::util::freq;
+use crate::util::xor;
+
+const MAX_KEY_LEN: usize = 48;
+
+pub fn solve(ciphertext: &amp;str) -&gt; Result&lt;(Vec&lt;u8&gt;, Vec&lt;u8&gt;), CpalError&gt; {
+    let ct = b64::b64_decode(ciphertext)?;
+    if ct.len() &lt; 2 {
+        return Err(CpalError::CiphertextTooShort(ct.len()));
+    }
+
+    let key_len = key_length(&amp;ct);
+    let key: Vec&lt;u8&gt; = (0..key_len)
+        .map(|col| {
+            let column = column_of(&amp;ct, col, key_len);
+            freq::best_single_byte_key(&amp;column).0
+        })
+        .collect();
+    let plaintext =
+        xor::xore(&amp;ct, &amp;key).expect("key length is at least two, so the key is non-empty");
+    Ok((key, plaintext))
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>MAX_KEY_LEN = 48</code>: long enough to exceed this level's key length (29) so the minimum-entropy split is unambiguous; it is also capped at <code>ct.len()</code>.</li>
+      <li>The <code>xore</code> is called with <code>.expect</code> — safe because <code>key_length</code> returns ≥ 2, so the key can't be empty. A 1-byte input trips <code>CiphertextTooShort</code> earlier.</li>
+    </ul>
+    <details class="support">
+      <summary>supporting code · l006.rs — private key-length helpers</summary>
+      <div class="body">
+        <div class="code-wrap"><pre><code>fn key_length(ct: &amp;[u8]) -&gt; usize {
+    let upper = MAX_KEY_LEN.min(ct.len());
+    (2..=upper)
+        .map(|l| (l, column_entropy(ct, l)))
+        .min_by(|a, b| a.1.partial_cmp(&amp;b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(l, _)| l)
+        .unwrap_or(2)
+}
+
+fn column_entropy(ct: &amp;[u8], l: usize) -&gt; f64 {
+    let total = ct.len() as f64;
+    (0..l)
+        .map(|col| {
+            let column = column_of(ct, col, l);
+            (column.len() as f64 / total) * entropy::normalized_shannon_entropy(&amp;column)
+        })
+        .sum()
+}
+
+fn column_of(ct: &amp;[u8], col: usize, step: usize) -&gt; Vec&lt;u8&gt; {
+    ct.iter().skip(col).step_by(step).copied().collect()
+}</code></pre></div>
+        <p><code>column_entropy</code> weights each column by its share of bytes (<code>len/total</code>) so short trailing columns don't dominate — comparing across key lengths means the score must be length-independent.</p>
+      </div>
+    </details>
+    <details class="support">
+      <summary>supporting code · util/entropy.rs — normalized_shannon_entropy</summary>
+      <div class="body">
+        <p>Byte histogram → Shannon entropy, normalized by dividing by <code>log2(256) = 8</code> so the result is in <code>[0, 1]</code>. 0.0 for a single repeated byte, 1.0 for a perfectly uniform distribution of all 256 values.</p>
+        <div class="code-wrap"><pre><code>pub fn normalized_shannon_entropy(data: &amp;[u8]) -&gt; f64 {
+    let n = data.len() as f64;
+    if n == 0.0 {
+        return 0.0;
+    }
+
+    let mut counts = [0usize; 256];
+    for &amp;b in data {
+        counts[b as usize] += 1;
+    }
+
+    let mut h = 0.0;
+    for &amp;c in &amp;counts {
+        let c = c as f64;
+        if c &gt; 0.0 {
+            let p = c / n;
+            h -= p * p.log2();
+        }
+    }
+    h / 8.0 // log2(256): the maximum entropy a byte value distribution can carry.
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">recovered key length</span><code>29</code></div>
+      <div class="ex-row"><span class="ex-k">first key byte</span><code>key[0] = 0x54 "T" · plain[0] = 0x49 "I" · ct[0] = 0x1d   (base64 head "HUIf…")</code></div>
+      <div class="ex-row out"><span class="ex-k">full key</span><code>"Terminator X: Bring the noise"</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input (b64)</span><code>data/challenge_06.txt · head: HUIfTQsPAh9PE048GmllH0kcDk4TAQsHThsBFkU2AB4BSWQgVB0dQzNTTmVS…</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>key "Terminator X: Bring the noise"  (29 bytes) · plaintext head "I'm back and I'm ringin' the bell that dawns a new day!"</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l006.rs</code><span class="sep">·</span> helpers <code>util/b64.rs</code>, <code>util/entropy.rs</code>, <code>util/freq.rs</code>, <code>util/xor.rs</code><span class="sep">·</span> tests: <code>mod solve</code> (3 unit + 1 property) + data file</p>
+  </section>
+  <!-- L7 -->
+  <section id="l7" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L7</span>
+      <h2>AES-128 in ECB mode</h2>
+      <span class="chip">set1::l007</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Decrypt the following base64-encoded file with AES-128 in ECB mode with the key <strong>"YELLOW SUBMARINE"</strong> (hex: <code>59454c4c4f57205355424d4152494e45</code>).</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>ECB is the block mode that keeps no state: every 16-byte block is encrypted/decrypted <em>independently</em> and in place. So "decrypt the file" is just "decrypt the back-to-back blocks and concat". The <code>aes</code> crate provides AES-128 as a block primitive; this level's <code>solve</code> is only the block-walk and the two preconditions (length is a multiple of 16, and the key is exactly 16 bytes).</p>
+    <div class="insight"><span class="tag">Core move</span><p>AES is stateless at the block level (that's <code>ECB</code>): chunk the ciphertext into 16-byte blocks, feed each through <code>BlockDecrypt::decrypt_block</code>, and collect. No IV, no chaining, no padding — the payload is already block-aligned.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use aes::cipher::BlockDecrypt;
+use aes::cipher::KeyInit;
+use aes::Aes128;
+use generic_array::GenericArray;
+
+use crate::util::b64;
+use crate::util::err::CpalError;
+
+const AES_BLOCK_SIZE: usize = 16;
+
+pub fn solve(encrypted_b64: &amp;str, key: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let ct = b64::b64_decode(encrypted_b64)?;
+    if ct.len() % AES_BLOCK_SIZE != 0 {
+        return Err(CpalError::CiphertextNotBlockAligned(ct.len()));
+    }
+    if key.len() != AES_BLOCK_SIZE {
+        return Err(CpalError::InvalidKeyLength(key.len()));
+    }
+
+    let cipher = Aes128::new_from_slice(key).map_err(|_| CpalError::InvalidKeyLength(key.len()))?;
+
+    let mut out = Vec::with_capacity(ct.len());
+    for chunk in ct.chunks_exact(AES_BLOCK_SIZE) {
+        let mut block = GenericArray::clone_from_slice(chunk);
+        cipher.decrypt_block(&amp;mut block);
+        out.extend_from_slice(block.as_slice());
+    }
+    Ok(out)
+}</code></pre></div>
+    <ul class="notes">
+      <li>Pulled from <code>aes</code> crate + the re-export of its <code>BlockDecrypt</code> trait and <code>generic_array</code> 16-byte wrapper — the only external dependency in this crate.</li>
+      <li>Two explicit preconditions: ciphertext length is a multiple of 16, key is exactly 16 bytes. Both are <code>CpalError</code>s.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">known vector</span><code>FIPS-197 A.1: key 000102…0f · ct 69c4e0d8… · → plain 00 11 22 … ff</code></div>
+      <div class="ex-row out"><span class="ex-k">official</span><code>key "YELLOW SUBMARINE" · b64 head "CRIwqt…6828" · → "I'm back and I'm ringin' the bell…"</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input (b64)</span><code>data/challenge_07.txt · head: CRIwqt4+szDbqkNY+I0qbDe3LQz0wiw0SuxBQtAM5TDdMbjCMD/venUDW9BL…</code></div>
+      <div class="io-row"><span class="io-k in">key</span><code>"YELLOW SUBMARINE"  (16 bytes)</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>"I'm back and I'm ringin' the bell that dawns a new day!"  (same plaintext as L6)</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l007.rs</code><span class="sep">·</span> helpers <code>util/b64.rs</code> + <strong>crate <code>aes</code></strong> (AES block primitive) + <code>generic-array</code><span class="sep">·</span> tests: <code>mod solve</code> (4 unit + 1 property, incl. the FIPS-197 A.1 vector) + data file</p>
+  </section>
+
+  <!-- L8 -->
+  <section id="l8" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L8</span>
+      <h2>Detect AES in ECB mode</h2>
+      <span class="chip">set1::l008</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Here's some data at 0x800/546e6b6a6463666d6c626765/08-ecb.txt. Find the lines that contain AES in ECB mode.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>ECB is deterministic and stateless, so <em>an identical 16-byte plaintext block always yields the identical 16-byte ciphertext block</em>. A file of "random-looking" ciphertext under CBC essentially never repeats a block — but an ECB file will, the moment the plaintext has two identical 16-byte spans. So the detector is: for each hex line, split into 16-byte chunks, and flag the line if any chunk appears more than once. A <code>HashSet</code> makes the "has it been seen already?" check <code>O(1)</code>.</p>
+    <div class="insight"><span class="tag">Core move</span><p><code>for block in ct.chunks_exact(16)</code> → if <code>!seen.insert(block)</code> we already had this block → return its line index. That's it. This is the first place L7's ECB assumption pays off in a detection test.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::err::CpalError;
+use crate::util::hex;
+
+const BLOCK_SIZE: usize = 16;
+
+pub fn solve(lines: &amp;[&amp;str]) -&gt; Result&lt;usize, CpalError&gt; {
+    if lines.is_empty() {
+        return Err(CpalError::NoLines);
+    }
+    for (i, line) in lines.iter().enumerate() {
+        let ct = hex::from_hex(line)?;
+        if has_repeated_block(&amp;ct) {
+            return Ok(i);
+        }
+    }
+    Err(CpalError::NoRepeatedBlock)
+}
+
+/// True when any 16-byte block of `ct` occurs two or more times.
+fn has_repeated_block(ct: &amp;[u8]) -&gt; bool {
+    let mut seen = std::collections::HashSet::new();
+    for block in ct.chunks_exact(BLOCK_SIZE) {
+        if !seen.insert(block) {
+            return true;
+        }
+    }
+    false
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>chunks_exact</code> is silent on a ragged trailing chunk — a line not a multiple of 16 is treated as "no repeat in the full blocks", which is safe detection-wise.</li>
+      <li>First line carrying a repeat wins; <code>NoRepeatedBlock</code> only fires when none do.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">flagged line</span><code>index 132  (0-based)</code></div>
+      <div class="ex-row"><span class="ex-k">repeating block</span><code>08649af70dc06f4fd5d2d69c744cd283   (blocks 1, 3, 5, 7 of that line)</code></div>
+      <div class="ex-row out"><span class="ex-k">uniqueness</span><code>only line 132 of challenge_08.txt carries a repeat; the <code>solve</code> test asserts the whole dump flags exactly <code>[132]</code></code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>data/challenge_08.txt · multiple hex lines, each a ciphertext</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>idx 132 · repeated block <code>08649af70dc06f4f…</code> at blocks 1,3,5,7 of that line</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l008.rs</code><span class="sep">·</span> helper <code>util/hex.rs</code><span class="sep">·</span> tests: <code>mod solve</code> (4 unit, incl. the "flagged set is unique" oracle + 1 property) + data file</p>
+  </section>
+  <!-- Error type appendix -->
+  <section id="errors" class="block">
+    <h2>The error type</h2>
+    <p>Every <code>solve</code> either returns its answer or a single shared <code>CpalError</code>; eleven variants, one per distinct failure mode the levels actually produce, in <code>src/util/err.rs</code>. New variants are added just-in-time as a level needs them.</p>
+    <div class="err-table">
+      <div class="row"><div class="v">InvalidHexChar(c)</div><div class="m">A character that is not a valid hex digit. · <strong>L1 L2 L3 L4 L5 L8</strong></div></div>
+      <div class="row"><div class="v">OddLength</div><div class="m">A hex string with an odd number of characters. · <strong>hex decode — L1 L2 L3 L4 L5 L8</strong></div></div>
+      <div class="row"><div class="v">LengthMismatch</div><div class="m">The two inputs to a byte-wise operation have differing lengths. · <strong>util::xor — L2</strong></div></div>
+      <div class="row"><div class="v">InvalidBase64Char(c)</div><div class="m">A character that is not in the base64 alphabet. · <strong>util::b64 — L1 L6 L7</strong></div></div>
+      <div class="row"><div class="v">InvalidBase64Length(n)</div><div class="m">A base64 string whose length or padding is structurally invalid. · <strong>util::b64 — L1 L6 L7</strong></div></div>
+      <div class="row"><div class="v">NoLines</div><div class="m">No candidate lines were supplied to inspect. · <strong>L4 L8</strong></div></div>
+      <div class="row"><div class="v">EmptyKey</div><div class="m">The repeating-key operation has no key bytes. · <strong>util::xor — L5</strong></div></div>
+      <div class="row"><div class="v">CiphertextTooShort(n)</div><div class="m">The base64-decoded ciphertext is too short to analyze. · <strong>L6</strong></div></div>
+      <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7</strong></div></div>
+      <div class="row"><div class="v">CiphertextNotBlockAligned(n)</div><div class="m">An AES ciphertext whose length is not a multiple of 16. · <strong>L7</strong></div></div>
+      <div class="row"><div class="v">NoRepeatedBlock</div><div class="m">No ciphertext line revealed the repeated-block signature of ECB. · <strong>L8</strong></div></div>
+    </div>
+  </section>
+
+  <footer>
+    <p class="kicker">Source</p>
+    <p>One Rust crate. The library is <code>src/lib.rs</code> — just <code>pub mod sets</code> and <code>pub mod util</code>. Each level is a small module under <code>src/sets/set1/</code> exposing a <code>solve</code> function and a <code>#[cfg(test)]</code> module with its own tests (unit and proptest property oracles). Shared primitives live in <code>src/util/</code>. The official challenge payloads ship under <code>data/challenge_04.txt</code>, <code>data/challenge_06.txt</code>, <code>data/challenge_07.txt</code> and <code>data/challenge_08.txt</code>. Re-run everything — format, tests and clippy — with <code>just gate</code>.</p>
+  </footer>
+
+  </main>
+
+</div>
+
+<script>
+(function () {
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc-list a[data-toc]"));
+  if (!links.length) return;
+
+  function paint(spy) {
+    var offset = 90;
+    var current = null;
+    for (var i = 0; i < links.length; i++) {
+      var targetId = links[i].getAttribute("href").slice(1);
+      var el = document.getElementById(targetId);
+      if (!el) continue;
+      var s = el.getBoundingClientRect().top;
+      if (s - offset <= 0 && (current === null || s > current.s)) {
+        current = { link: links[i], s: s };
+      }
+    }
+    links.forEach(function (a) { a.classList.remove("active"); });
+    if (current) current.link.classList.add("active");
+  }
+
+  var ticking = false;
+  function schedule() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () { paint(spy); ticking = false; });
+  }
+  paint(false);
+  window.addEventListener("scroll", schedule, { passive: true });
+  window.addEventListener("resize", schedule, { passive: true });
+})();
+</script>
+<script>
+(function () {
+  var codeWraps = document.querySelectorAll(".code-wrap");
+  codeWraps.forEach(function (wrap) {
+    var code = wrap.querySelector("pre code");
+    if (!code) return;
+    var btn = document.createElement("button");
+    btn.className = "copy";
+    btn.type = "button";
+    btn.textContent = "copy";
+    btn.setAttribute("aria-label", "Copy code to clipboard");
+    btn.addEventListener("click", function () {
+      var text = code.innerText || "";
+      function okLabel() {
+        var old = btn.textContent;
+        btn.textContent = "copied";
+        btn.classList.add("ok");
+        setTimeout(function () { btn.textContent = old; btn.classList.remove("ok"); }, 1200);
+      }
+      function legacy() {
+        var range = document.createRange();
+        range.selectNodeContents(code);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        document.execCommand("copy");
+        sel.removeAllRanges();
+        okLabel();
+      }
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(okLabel, legacy);
+      } else {
+        legacy();
+      }
+    });
+    wrap.appendChild(btn);
+  });
+})();
+</script>
+</body>
+</html>
