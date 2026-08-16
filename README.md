@@ -44,8 +44,9 @@ src/
   lib.rs            crate root; #![deny(missing_docs)]
   util/             just-in-time shared helpers
     err.rs          CpalError
-    hex.rs          from_hex (decode)
-    b64.rs          b64_encode
+     hex.rs          from_hex (decode)
+     b64.rs          b64_encode
+     xor.rs          xor (byte-wise)
   sets/
     set1/
       l001.rs       Set 1 / Level 1
