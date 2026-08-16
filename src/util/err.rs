@@ -13,4 +13,13 @@ pub enum CpalError {
     /// A hex string with an odd number of characters.
     #[error("hex string has an odd number of characters")]
     OddLength,
+
+    /// The two inputs to a byte-wise operation have differing lengths.
+    #[error("inputs have different lengths: {a} and {b}")]
+    LengthMismatch {
+        /// Length of the first input.
+        a: usize,
+        /// Length of the second input.
+        b: usize,
+    },
 }
