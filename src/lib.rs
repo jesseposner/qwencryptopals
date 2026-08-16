@@ -1,3 +1,5 @@
+#![deny(missing_docs)]
+
 //! Cryptopals: hand-rolled solutions, one level at a time.
 //!
 //! Shared helpers live in `util`; per-setting solutions live in `sets`.

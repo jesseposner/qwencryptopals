@@ -1,3 +1,5 @@
+//! Base64 (RFC 4640) encode — a transport/pretty-print layer over raw bytes.
+
 /// Standard base64 alphabet, RFC 4640 §4: `A-Z a-z 0-9 + /`.
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 

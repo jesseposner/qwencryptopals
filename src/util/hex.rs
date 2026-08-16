@@ -1,3 +1,5 @@
+//! Hex decode — a transport/pretty-print layer over raw bytes.
+
 use crate::util::err::CpalError;
 
 /// Decode a hex-encoded string (pretty-print form) into raw bytes.
