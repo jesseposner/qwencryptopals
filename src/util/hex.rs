@@ -47,6 +47,8 @@ fn hex_val(b: u8) -> Result<u8, CpalError> {
 mod from_hex {
     use super::*;
 
+    use proptest::prelude::*;
+
     #[test]
     fn decodes_a_single_high_nibble_byte() {
         assert_eq!(from_hex("ff").unwrap(), vec![0xff]);
@@ -75,5 +77,32 @@ mod from_hex {
     #[test]
     fn returns_invalid_char_error_on_a_non_hex_digit() {
         assert_eq!(from_hex("zz").unwrap_err(), CpalError::InvalidHexChar('z'));
+    }
+
+    // Byte -> hex via std formatting is an independent oracle, not from_hex's logic.
+    proptest! {
+        #[test]
+        fn roundtrip_decodes_any_lowercase_hex_string(input in any::<Vec<u8>>()) {
+            let hex: String = input.iter().map(|b| format!("{b:02x}")).collect();
+            prop_assert_eq!(from_hex(&hex), Ok(input));
+        }
+
+        #[test]
+        fn roundtrip_decodes_any_uppercase_hex_string(input in any::<Vec<u8>>()) {
+            let hex: String = input.iter().map(|b| format!("{b:02X}")).collect();
+            prop_assert_eq!(from_hex(&hex), Ok(input));
+        }
+
+        #[test]
+        fn rejects_every_odd_length_string(n in 0usize..=128) {
+            let s = "a".repeat(2 * n + 1);
+            prop_assert_eq!(from_hex(&s), Err(CpalError::OddLength));
+        }
+
+        #[test]
+        fn reports_the_first_invalid_digit(n in 0usize..=128) {
+            let s = "ab".repeat(n) + "zz";
+            prop_assert_eq!(from_hex(&s), Err(CpalError::InvalidHexChar('z')));
+        }
     }
 }

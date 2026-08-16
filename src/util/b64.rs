@@ -51,6 +51,8 @@ pub fn b64_encode(input: &[u8]) -> String {
 mod b64_encode {
     use super::*;
 
+    use proptest::prelude::*;
+
     #[test]
     fn encodes_an_empty_input_to_an_empty_string() {
         assert_eq!(b64_encode(&[]), "");
@@ -69,5 +71,36 @@ mod b64_encode {
     #[test]
     fn pads_a_one_byte_input_with_two_eq_chars() {
         assert_eq!(b64_encode("a".as_bytes()), "YQ==");
+    }
+
+    proptest! {
+        #[test]
+        fn output_length_is_an_exact_multiple_of_four(input in any::<Vec<u8>>()) {
+            let enc = b64_encode(&input);
+            prop_assert_eq!(enc.len(), 4 * input.len().div_ceil(3));
+            prop_assert!(enc.len().is_multiple_of(4));
+        }
+
+        #[test]
+        fn output_only_uses_alphabet_and_padding(input in any::<Vec<u8>>()) {
+            for c in b64_encode(&input).chars() {
+                prop_assert!(ALPHABET.contains(&(c as u8)) || c == '=');
+            }
+        }
+
+        #[test]
+        fn padding_count_matches_input_length(input in any::<Vec<u8>>()) {
+            let expected_pad: usize = match input.len() % 3 {
+                0 => 0,
+                1 => 2,
+                _ => 1,
+            };
+            let enc = b64_encode(&input);
+            prop_assert_eq!(enc.matches('=').count(), expected_pad);
+            if expected_pad > 0 {
+                let padding = "=".repeat(expected_pad);
+                prop_assert!(enc.ends_with(padding.as_str()));
+            }
+        }
     }
 }
