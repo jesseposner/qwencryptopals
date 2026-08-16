@@ -38,4 +38,8 @@ pub enum CpalError {
     /// The key to a repeating-key operation has no bytes.
     #[error("key has no bytes")]
     EmptyKey,
+
+    /// The base64-decoded ciphertext is too short to analyze.
+    #[error("ciphertext too short to analyze: {0} bytes")]
+    CiphertextTooShort(usize),
 }

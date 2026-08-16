@@ -4,6 +4,7 @@
 //! cryptography on raw bytes lives here as it becomes necessary.
 
 pub mod b64;
+pub mod entropy;
 pub mod err;
 pub mod freq;
 pub mod hex;

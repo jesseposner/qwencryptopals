@@ -52,12 +52,13 @@ pub fn b64_encode(input: &[u8]) -> String {
 /// Decode a base64 string (RFC 4640, standard alphabet, `=` padding) to raw bytes.
 ///
 /// A transport/pretty-print layer; the cryptography operates on the raw bytes returned.
-/// Surrounding whitespace (including a trailing newline) is ignored.
+/// All ASCII whitespace is ignored, so wrapped multi-line blobs decode as well as a single
+/// unbroken line.
 ///
 /// # Errors
 ///
-/// - [`CpalError::InvalidBase64Length`] if the length is not a multiple of four, or the
-///   padding is not a trailing run of at most two `=` characters.
+/// - [`CpalError::InvalidBase64Length`] if the length of the non-whitespace content is not a
+///   multiple of four, or the padding is not a trailing run of at most two `=` characters.
 /// - [`CpalError::InvalidBase64Char`] if a character is not in the base64 alphabet.
 ///
 /// # Examples
@@ -66,7 +67,8 @@ pub fn b64_encode(input: &[u8]) -> String {
 /// assert_eq!(cryptopals::util::b64::b64_decode("YWJj"), Ok(b"abc".to_vec()));
 /// ```
 pub fn b64_decode(input: &str) -> Result<Vec<u8>, CpalError> {
-    let input = input.trim();
+    let input: String = input.chars().filter(|c| !c.is_whitespace()).collect();
+    let input = input.as_str();
     let len = input.len();
     if len == 0 {
         return Ok(Vec::new());
@@ -193,6 +195,12 @@ mod b64_decode {
     #[test]
     fn ignores_surrounding_whitespace() {
         assert_eq!(b64_decode("  YWJj\n"), Ok(b"abc".to_vec()));
+    }
+
+    #[test]
+    fn ignores_interior_line_breaks_in_a_wrapped_blob() {
+        assert_eq!(b64_decode("YWJj\nYWJj\n"), Ok(b"abcabc".to_vec()));
+        assert_eq!(b64_decode("YWJ\nj"), Ok(b"abc".to_vec()));
     }
 
     #[test]
