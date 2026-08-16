@@ -16,6 +16,10 @@ cargo test
 cargo clippy --all-targets --all-features --locked -- -D warnings
 ```
 
+Or, if you have [just](https://github.com/casey/just), `just gate` runs the three
+in sequence (it's the default recipe). Others: `just test`, `just test-fuzz`,
+`just lvl set1 l003`, `just lint`, `just fmt` — or `just -l` for the full list.
+
 `proptest` is a **dev-only** dependency used for property tests; it never ships in the crate.
 
 ## Conventions
