@@ -42,4 +42,16 @@ pub enum CpalError {
     /// The base64-decoded ciphertext is too short to analyze.
     #[error("ciphertext too short to analyze: {0} bytes")]
     CiphertextTooShort(usize),
+
+    /// An AES mode got a key that is not the 16 bytes AES-128 requires.
+    #[error("AES-128 key must be 16 bytes, got {0}")]
+    InvalidKeyLength(usize),
+
+    /// An AES ciphertext whose byte length is not a whole number of 16-byte blocks.
+    #[error("AES ciphertext has {0} bytes, not a multiple of 16")]
+    CiphertextNotBlockAligned(usize),
+
+    /// No ciphertext line revealed the repeated-block signature of ECB.
+    #[error("no ciphertext line shows a repeated 16-byte block")]
+    NoRepeatedBlock,
 }
