@@ -71,6 +71,8 @@ main{min-width:0}
 .toc-list a:hover{color:var(--fg);background:var(--accent-dim);text-decoration:none}
 .toc-list a.active{color:var(--accent-2);border-left-color:var(--accent);
   background:linear-gradient(90deg,var(--accent-dim),transparent);}
+.toc-list .set-head{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);padding:14px 12px 2px}
 
 section.block{scroll-margin-top:calc(var(--topbar-h) + 20px)}
 .challenge{scroll-margin-top:calc(var(--topbar-h) + 20px);
@@ -176,6 +178,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   .toc-list a{white-space:nowrap;border:1px solid var(--border-soft);border-radius:999px;padding:6px 13px;font-size:13px;background:var(--panel-2)}
   .toc-list a .n{width:auto;margin-right:4px}
   .toc-list a.active{border-color:var(--accent-line);background:var(--accent-dim)}
+  .toc-list .set-head{display:none}
   .hero{padding-top:34px}
   .challenge{padding:30px 0 4px}
 }
@@ -200,8 +203,8 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 </div>
 
 <header class="hero">
-  <p class="kicker">Cryptopals · Set 1 · The Byte, String &amp; Stream Ciphers</p>
-  <h1>Set 1, Levels 1–8 — annotated walkthrough</h1>
+  <p class="kicker">Cryptopals · Sets 1–2 · Byte/Stream &amp; Block Ciphers</p>
+  <h1>Sets 1–2, Levels L1–L9 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -209,11 +212,12 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>8</b> levels</span>
-    <span class="pill"><b>71</b> unit + <b>6</b> doc tests</span>
+    <span class="pill g"><b>9</b> levels</span>
+    <span class="pill"><b>87</b> unit + <b>8</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
-    <span class="pill">6 shared <b>util</b> modules</span>
+    <span class="pill">7 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
+    <span class="pill">Set 2 · block ciphers</span>
   </div>
 </header>
 
@@ -231,6 +235,8 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l6" data-toc><span class="n">L6</span>Break repeating-key XOR</a></li>
       <li><a href="#l7" data-toc><span class="n">L7</span>AES-128 ECB</a></li>
       <li><a href="#l8" data-toc><span class="n">L8</span>Detect AES in ECB</a></li>
+      <li class="set-head" aria-hidden="true">Set 2 · Block ciphers</li>
+      <li><a href="#l9" data-toc><span class="n">L9</span>PKCS#7 padding</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -240,7 +246,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the eight levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the nine levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -248,7 +254,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><strong>Worked example</strong> — a few real bytes, by hand, so you can watch it happen.</li>
       <li><strong>Official I/O</strong> — the exact inputs and outputs the tests assert against.</li>
     </ul>
-    <p>The library is <code>src/lib.rs</code>; the challenges live in <code>src/sets/set1/</code> and the reusable helpers in <code>src/util/</code>. The test suite is the definition of "done".</p>
+    <p>The library is <code>src/lib.rs</code>; the challenges live in <code>src/sets/set1/</code> and <code>src/sets/set2/</code> and the reusable helpers in <code>src/util/</code>. The test suite is the definition of "done".</p>
     <ul class="notes">
       <li>The trusted gate (fmt + test + clippy) is <code>just gate</code>. Run one level's own tests with <code>just lvl set1 l003</code>.</li>
       <li><code>L1</code>–<code>L6</code> are hand-rolled in <code>src/util/</code> on raw bytes. <code>L7</code> pulls in the <code>aes</code> crate for AES-128 itself; <code>L8</code> just reuses <code>util::hex</code>.</li>
@@ -258,13 +264,14 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Building blocks -->
   <section id="blocks" class="block">
     <h2>The building blocks</h2>
-    <p>Six small modules in <code>src/util/</code> carry almost all of the work; each <code>solve</code> is then mostly glue. All of them operate on raw bytes — hex and base64 are only transport.</p>
+    <p>Seven small modules in <code>src/util/</code> carry almost all of the work; each <code>solve</code> is then mostly glue. All of them operate on raw bytes — hex and base64 are only transport.</p>
     <div class="blocks-table">
       <div class="row"><div class="mod">util::hex</div><div class="desc"><code>from_hex</code>: hex to <code>Vec&lt;u8&gt;</code>. The test oracles also hand-format bytes back to hex. <span class="lvl">· L1 · L2 · L3 · L4 · L5 · L8</span></div></div>
       <div class="row"><div class="mod">util::b64</div><div class="desc">hand-rolled RFC 4640 <code>b64_encode</code> and <code>b64_decode</code>. <span class="lvl">· L1 · L6 · L7</span></div></div>
       <div class="row"><div class="mod">util::xor</div><div class="desc"><code>xor</code> (equal-length) and <code>xore</code> (repeating-key, cycles from the start). <span class="lvl">· L2 · L5 · L6</span></div></div>
       <div class="row"><div class="mod">util::freq</div><div class="desc"><code>english_score</code> and <code>best_single_byte_key</code> — the single-byte XOR attack. <span class="lvl">· L3 · L4 · L6</span></div></div>
       <div class="row"><div class="mod">util::entropy</div><div class="desc"><code>normalized_shannon_entropy</code>, in <code>[0,1]</code>; the key-length estimator. <span class="lvl">· L6</span></div></div>
+      <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9</span></div></div>
       <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
     </div>
   </section>
@@ -847,10 +854,85 @@ fn has_repeated_block(ct: &amp;[u8]) -&gt; bool {
     </div>
     <p class="files"><strong>Files</strong> <code>src/sets/set1/l008.rs</code><span class="sep">·</span> helper <code>util/hex.rs</code><span class="sep">·</span> tests: <code>mod solve</code> (4 unit, incl. the "flagged set is unique" oracle + 1 property) + data file</p>
   </section>
+
+  <!-- L9 (Set 2 / Level 1) -->
+  <section id="l9" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L9</span>
+      <h2>Implement PKCS#7 padding</h2>
+      <span class="chip">set2::l001</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Pad any block to a specific block length, by appending the number of bytes of padding to the end of the block. <code>"YELLOW SUBMARINE"</code> padded to 20 bytes becomes <code>"YELLOW SUBMARINE" + "\x04\x04\x04\x04"</code>.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>Padding is transport, not cryptography. PKCS#7 fills the final block out to a whole multiple of the block size by appending <code>n</code> identical bytes, each of value <code>n</code>, where <code>n</code> is however many bytes are needed to reach the next block boundary. The subtlety: when the input is <em>already</em> a whole number of blocks, <code>n = block_size</code>, so a <strong>full</strong> extra block of padding is added — which is exactly what makes unpadding unambiguous. The value <code>0</code> can never occur (<code>n</code> ranges <code>1..=block_size</code>), so the pad count can always be read off the last byte.</p>
+    <div class="insight"><span class="tag">Core move</span><p><code>n = block_size - data.len() % block_size</code> — because <code>%</code> binds tighter than <code>-</code>, that is <code>block_size - (len % block_size)</code>; when <code>len</code> is already aligned it's a full <code>block_size</code>. Then <code>out.resize(out.len() + n, n as u8)</code> appends <code>n</code> copies of the byte <code>n</code> in one shot.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::err::CpalError;
+use crate::util::pad;
+
+pub fn solve(plaintext: &amp;str, block_size: usize) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    pad::pkcs7_pad(plaintext.as_bytes(), block_size)
+}</code></pre></div>
+    <ul class="notes">
+      <li>The <code>solve</code> is a one-liner on purpose: the reusable primitive lives in <code>util/pad.rs</code> so the next levels that pad (CBC, for instance) call the same thing.</li>
+      <li>The inverse <code>pkcs7_unpad</code> reads the count off the last byte and demands all <code>n</code> trailing bytes equal it; a <code>pad → unpad</code> round-trip property test pins the two as exact inverses.</li>
+      <li>Block size is <code>1..=255</code> — the pad value is a single byte. L9 has no data file; the vector is the official <code>YELLOW SUBMARINE → 20</code> example.</li>
+    </ul>
+
+    <details class="support" open>
+      <summary>supporting code · util/pad.rs — pkcs7_pad / pkcs7_unpad</summary>
+      <div class="body">
+        <p>Both functions guard <code>block_size</code> up front, then do the math: pad appends <code>n</code> copies of the byte <code>n</code>; unpad validates the trailing block and strips it.</p>
+        <div class="code-wrap"><pre><code>pub fn pkcs7_pad(data: &amp;[u8], block_size: usize) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    if !(1..=255).contains(&amp;block_size) {
+        return Err(CpalError::InvalidBlockSize(block_size));
+    }
+    let n = block_size - data.len() % block_size;
+    let mut out = data.to_vec();
+    out.resize(out.len() + n, n as u8);
+    Ok(out)
+}
+
+pub fn pkcs7_unpad(data: &amp;[u8], block_size: usize) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    if !(1..=255).contains(&amp;block_size) {
+        return Err(CpalError::InvalidBlockSize(block_size));
+    }
+    if data.is_empty() || !data.len().is_multiple_of(block_size) {
+        return Err(CpalError::BadPadding(data.len()));
+    }
+    let n = data[data.len() - 1] as usize;
+    if n == 0 || n &gt; block_size || !data[data.len() - n..].iter().all(|&amp;b| b as usize == n) {
+        return Err(CpalError::BadPadding(data.len()));
+    }
+    Ok(data[..data.len() - n].to_vec())
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">input</span><code>"YELLOW SUBMARINE"  (16 bytes)</code></div>
+      <div class="ex-row"><span class="ex-k">pad to 20</span><code>n = 20 - (16 % 20) = 4  →  + 04 04 04 04  →  20 bytes</code></div>
+      <div class="ex-row out"><span class="ex-k">pad to 16</span><code>already aligned  →  n = 16  →  + 16 bytes of 0x10  →  32 bytes</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>"YELLOW SUBMARINE", block_size 20</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>59 45 46 4c 4c 4f 57 20 53 55 42 4d 41 52 49 4e 45  04 04 04 04</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set2/l001.rs</code><span class="sep">·</span> helper <code>util/pad.rs</code> (+ <code>util/err.rs</code>: <code>InvalidBlockSize</code>, <code>BadPadding</code>)<span class="sep">·</span> tests: <code>mod tests</code> (3 unit + 2 property) · <code>util::pad</code> (7 unit + 4 property, incl. the pad→unpad round-trip)</p>
+  </section>
   <!-- Error type appendix -->
   <section id="errors" class="block">
     <h2>The error type</h2>
-    <p>Every <code>solve</code> either returns its answer or a single shared <code>CpalError</code>; eleven variants, one per distinct failure mode the levels actually produce, in <code>src/util/err.rs</code>. New variants are added just-in-time as a level needs them.</p>
+    <p>Every <code>solve</code> either returns its answer or a single shared <code>CpalError</code>; thirteen variants, one per distinct failure mode the levels actually produce, in <code>src/util/err.rs</code>. New variants are added just-in-time as a level needs them.</p>
     <div class="err-table">
       <div class="row"><div class="v">InvalidHexChar(c)</div><div class="m">A character that is not a valid hex digit. · <strong>L1 L2 L3 L4 L5 L8</strong></div></div>
       <div class="row"><div class="v">OddLength</div><div class="m">A hex string with an odd number of characters. · <strong>hex decode — L1 L2 L3 L4 L5 L8</strong></div></div>
@@ -863,12 +945,14 @@ fn has_repeated_block(ct: &amp;[u8]) -&gt; bool {
       <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7</strong></div></div>
       <div class="row"><div class="v">CiphertextNotBlockAligned(n)</div><div class="m">An AES ciphertext whose length is not a multiple of 16. · <strong>L7</strong></div></div>
       <div class="row"><div class="v">NoRepeatedBlock</div><div class="m">No ciphertext line revealed the repeated-block signature of ECB. · <strong>L8</strong></div></div>
+      <div class="row"><div class="v">InvalidBlockSize(n)</div><div class="m">A PKCS#7 block size outside <code>1..=255</code> was requested. · <strong>L9</strong></div></div>
+      <div class="row"><div class="v">BadPadding(n)</div><div class="m">A buffer's PKCS#7 padding is malformed for its block size. · <strong>util::pad (pkcs7_unpad)</strong></div></div>
     </div>
   </section>
 
   <footer>
     <p class="kicker">Source</p>
-    <p>One Rust crate. The library is <code>src/lib.rs</code> — just <code>pub mod sets</code> and <code>pub mod util</code>. Each level is a small module under <code>src/sets/set1/</code> exposing a <code>solve</code> function and a <code>#[cfg(test)]</code> module with its own tests (unit and proptest property oracles). Shared primitives live in <code>src/util/</code>. The official challenge payloads ship under <code>data/challenge_04.txt</code>, <code>data/challenge_06.txt</code>, <code>data/challenge_07.txt</code> and <code>data/challenge_08.txt</code>. Re-run everything — format, tests and clippy — with <code>just gate</code>.</p>
+    <p>One Rust crate. The library is <code>src/lib.rs</code> — just <code>pub mod sets</code> and <code>pub mod util</code>. Each level is a small module under <code>src/sets/set1/</code> or <code>src/sets/set2/</code> exposing a <code>solve</code> function and a <code>#[cfg(test)]</code> module with its own tests (unit and proptest property oracles). Shared primitives live in <code>src/util/</code>. The official challenge payloads ship under <code>data/challenge_04.txt</code>, <code>data/challenge_06.txt</code>, <code>data/challenge_07.txt</code> and <code>data/challenge_08.txt</code>. Re-run everything — format, tests and clippy — with <code>just gate</code>.</p>
   </footer>
 
   </main>

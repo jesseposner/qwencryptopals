@@ -8,4 +8,5 @@ pub mod entropy;
 pub mod err;
 pub mod freq;
 pub mod hex;
+pub mod pad;
 pub mod xor;

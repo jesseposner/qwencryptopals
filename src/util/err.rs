@@ -54,4 +54,12 @@ pub enum CpalError {
     /// No ciphertext line revealed the repeated-block signature of ECB.
     #[error("no ciphertext line shows a repeated 16-byte block")]
     NoRepeatedBlock,
+
+    /// A PKCS#7 block size outside `1..=255` was requested.
+    #[error("block size must be 1..=255 bytes, got {0}")]
+    InvalidBlockSize(usize),
+
+    /// A buffer's PKCS#7 padding is malformed for its block size.
+    #[error("malformed PKCS#7 padding in {0} bytes")]
+    BadPadding(usize),
 }
