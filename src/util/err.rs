@@ -51,6 +51,10 @@ pub enum CpalError {
     #[error("AES ciphertext has {0} bytes, not a multiple of 16")]
     CiphertextNotBlockAligned(usize),
 
+    /// An initialization vector for a block-cipher mode that is not 16 bytes.
+    #[error("initialization vector must be 16 bytes, got {0}")]
+    InvalidIvLength(usize),
+
     /// No ciphertext line revealed the repeated-block signature of ECB.
     #[error("no ciphertext line shows a repeated 16-byte block")]
     NoRepeatedBlock,

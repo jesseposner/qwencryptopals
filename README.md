@@ -22,7 +22,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 Or, if you have [just](https://github.com/casey/just), `just gate` runs the three
 in sequence (it's the default recipe). Others: `just test`, `just test-fuzz`,
 `just lvl set1 l003`, `just lint`, `just fmt`, `just doc` — or `just -l` for the
-full list. The suite is **87 unit + 8 doc tests** and growing one level at a time.
+full list. The suite is **97 unit + 9 doc tests** and growing one level at a time.
 
 `proptest` is a **dev-only** dependency used for property tests; it never ships in the crate.
 
@@ -54,15 +54,19 @@ src/
     err.rs            CpalError
     hex.rs            from_hex (decode)
     b64.rs            b64_encode / b64_decode
+    cbc.rs            cbc::decrypt (AES-128-CBC, hand-rolled chain)
+    pad.rs            pkcs7_pad / pkcs7_unpad
     xor.rs            xor (byte-wise) + xore (repeating-key)
     freq.rs           english_score + best_single_byte_key
     entropy.rs        normalized_shannon_entropy
   sets/
     set1/
       l001.rs … l008.rs    Set 1, Levels 1–8
+    set2/
+      l001.rs … l002.rs    Set 2, Levels 1–2 (PKCS#7, CBC)
 docs/
-  index.html          self-contained HTML walkthrough of all 8 levels
+  index.html          self-contained HTML walkthrough of Sets 1–2, Levels L1–L10
 data/
-  challenge_04.txt, challenge_06.txt, challenge_07.txt, challenge_08.txt
-                      official Cryptopals payloads read by their test modules
+  challenge_04.txt, challenge_06.txt, challenge_07.txt, challenge_08.txt,
+  challenge_10.txt   official Cryptopals payloads read by their test modules
 ```

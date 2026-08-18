@@ -199,12 +199,12 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Set 1</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 71 unit + 6 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 97 unit + 9 doc tests</div>
 </div>
 
 <header class="hero">
   <p class="kicker">Cryptopals · Sets 1–2 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–2, Levels L1–L9 — annotated walkthrough</h1>
+  <h1>Sets 1–2, Levels L1–L10 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -212,10 +212,10 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>9</b> levels</span>
-    <span class="pill"><b>87</b> unit + <b>8</b> doc tests</span>
+    <span class="pill g"><b>10</b> levels</span>
+    <span class="pill"><b>97</b> unit + <b>9</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
-    <span class="pill">7 shared <b>util</b> modules</span>
+    <span class="pill">8 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
     <span class="pill">Set 2 · block ciphers</span>
   </div>
@@ -237,6 +237,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l8" data-toc><span class="n">L8</span>Detect AES in ECB</a></li>
       <li class="set-head" aria-hidden="true">Set 2 · Block ciphers</li>
       <li><a href="#l9" data-toc><span class="n">L9</span>PKCS#7 padding</a></li>
+      <li><a href="#l10" data-toc><span class="n">L10</span>Implement CBC mode</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -929,10 +930,96 @@ pub fn pkcs7_unpad(data: &amp;[u8], block_size: usize) -&gt; Result&lt;Vec&lt;u8
     </div>
     <p class="files"><strong>Files</strong> <code>src/sets/set2/l001.rs</code><span class="sep">·</span> helper <code>util/pad.rs</code> (+ <code>util/err.rs</code>: <code>InvalidBlockSize</code>, <code>BadPadding</code>)<span class="sep">·</span> tests: <code>mod tests</code> (3 unit + 2 property) · <code>util::pad</code> (7 unit + 4 property, incl. the pad→unpad round-trip)</p>
   </section>
+
+  <section id="l10" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L10</span>
+      <h2>Implement CBC mode</h2>
+      <span class="chip">set2::l002</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">CBC mode is a block-cipher mode that lets us move irregularly-sized messages even though a block cipher only transforms individual blocks. Each ciphertext block is added to the next plaintext block before the next call to the cipher core; the first plaintext block has no "previous" block, so it is XORed with a <em>fake 0th ciphertext block</em> — the <em>initialization vector</em> (IV). Implement CBC <em>by hand</em> from the AES block function you wrote earlier (run it as <em>decrypt</em> and verify by decrypting what you encrypt), combined with your XOR primitive. Don't cheat — don't use OpenSSL's CBC code. The file here is intelligible when CBC-decrypted against <code>"YELLOW SUBMARINE"</code> with an IV of all <code>\x00</code>.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>A block cipher only knows how to chew a single fixed-size block, so CBC threads the blocks into a chain: before a block is handed to the AES core it is XORed with the <em>previous ciphertext block</em>, and the very first block is XORed with the IV instead — there is no "previous" block yet. That single move is what breaks ECB's property that identical plaintext blocks map to identical ciphertext blocks. Decryption is the mirror image and it is almost as little code as encryption: decrypt each block with the AES core, then XOR the result with the ciphertext block that sits just before it — the only thing that flips is <em>order</em>: the XOR happens <em>after</em> the core call instead of before. So CBC builds straight out of the 16-byte block function from L7 plus XOR.</p>
+    <div class="insight"><span class="tag">Core move</span><p>decrypt the block with the AES core, then XOR it with the ciphertext block that precedes it (the IV for block 0); push those bytes onto the output and slide the just-consumed <strong>ciphertext</strong> block in as the new "previous".</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::b64;
+use crate::util::cbc;
+use crate::util::err::CpalError;
+use crate::util::pad;
+
+const AES_BLOCK_SIZE: usize = 16;
+
+pub fn solve(encrypted_b64: &amp;str, key: &amp;[u8], iv: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let ct = b64::b64_decode(encrypted_b64)?;
+    let raw = cbc::decrypt(&amp;ct, key, iv)?;
+    pad::pkcs7_unpad(&amp;raw, AES_BLOCK_SIZE)
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>solve</code> is a deliberate thin wrapper: base64-decode → <code>cbc::decrypt</code> → <code>pkcs7_unpad</code>. The reusable chain lives in <code>util/cbc.rs</code>, so the later levels that decrypt CBC (the bit-flip, the oracle, the padding oracle) call the same primitive.</li>
+      <li><code>cbc::decrypt</code> leaves the padding in place on purpose; stripping it in <code>solve</code> keeps the primitive decoupled from PKCS#7 so it can be pinned straight against the SP 800-38A reference vectors.</li>
+      <li>The official blob is AES-128-CBC under the 16-byte key <code>b"YELLOW SUBMARINE"</code> with a 16-byte zero IV; the ciphertext is a whole number of 16-byte blocks.</li>
+      <li>No OpenSSL. The chain and the XOR are written by hand, and the "verify it" step is the round-trip property test that encrypts then hands the result to <code>solve</code>.</li>
+    </ul>
+
+    <details class="support" open>
+      <summary>supporting code · util/cbc.rs — decrypt (the hand-rolled chain)</summary>
+      <div class="body">
+        <p>Validate the key, IV and block alignment up front, then walk the ciphertext one block at a time, decrypting and folding each block into the previous ciphertext block.</p>
+        <div class="code-wrap"><pre><code>pub fn decrypt(ct: &amp;[u8], key: &amp;[u8], iv: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    if iv.len() != BLOCK {
+        return Err(CpalError::InvalidIvLength(iv.len()));
+    }
+    if key.len() != BLOCK {
+        return Err(CpalError::InvalidKeyLength(key.len()));
+    }
+    if !ct.len().is_multiple_of(BLOCK) {
+        return Err(CpalError::CiphertextNotBlockAligned(ct.len()));
+    }
+
+    let cipher = Aes128::new_from_slice(key).map_err(|_| CpalError::InvalidKeyLength(key.len()))?;
+
+    let mut out = Vec::with_capacity(ct.len());
+    let mut prev = &lt;[u8; BLOCK]&gt;::try_from(iv).expect("iv is exactly 16 bytes");
+    for block in ct.chunks_exact(BLOCK) {
+        let mut buf = GenericArray::&lt;u8, _&gt;::clone_from_slice(block);
+        cipher.decrypt_block(&amp;mut buf);
+        for (i, &amp;b) in buf.iter().enumerate() {
+            out.push(b ^ prev[i]);
+        }
+        prev = &lt;[u8; BLOCK]&gt;::try_from(block).expect("each chunk is exactly 16 bytes");
+    }
+    Ok(out)
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <p>First chaining step of the SP 800-38A AES-128-CBC vector, in real bytes:</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">key</span><code>2b 7e 15 16 28 ae d2 a6 ab f7 15 88 09 cf 4f 3c</code></div>
+      <div class="ex-row"><span class="ex-k">iv / ct0</span><code>00 01 … 0f      |      76 49 ab ac 81 19 b2 46 ce e9 8e 9b 12 e9 19 7d</code></div>
+      <div class="ex-row"><span class="ex-k">AES⁻¹ core</span><code>6b c0 bc e1 2a 45 99 99 e1 34 74 1b 7f 9e 19 25   (core alone)</code></div>
+      <div class="ex-row out"><span class="ex-k">XOR iv</span><code>6b c1 be e2 2e 40 9f 96 e9 3d 7e 11 73 93 17 2a   = p0</code></div>
+      <div class="ex-row"><span class="ex-k">then</span><code>p1 = AES⁻¹(ct1) XOR ct0   → the chain advances the <em>ciphertext</em> block, not the plaintext</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>data/challenge_10.txt (base64) · key "YELLOW SUBMARINE" · iv 00…00</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>I'm back and I'm ringin' the bell \nA rockin' on the mike while the fly girls yell \n… (2876 bytes, padding stripped)</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set2/l002.rs</code><span class="sep">·</span> helper <code>util/cbc.rs</code> (+ <code>util/err.rs</code>: <code>InvalidIvLength</code>; payload <code>data/challenge_10.txt</code>)<span class="sep">·</span> tests: <code>util::cbc::decrypt</code> (5 unit, incl. two SP 800-38A KATs + a doctest) · <code>l002</code> (4 unit + 1 encrypt→decrypt round-trip property)</p>
+  </section>
   <!-- Error type appendix -->
   <section id="errors" class="block">
     <h2>The error type</h2>
-    <p>Every <code>solve</code> either returns its answer or a single shared <code>CpalError</code>; thirteen variants, one per distinct failure mode the levels actually produce, in <code>src/util/err.rs</code>. New variants are added just-in-time as a level needs them.</p>
+    <p>Every <code>solve</code> either returns its answer or a single shared <code>CpalError</code>; fourteen variants, one per distinct failure mode the levels actually produce, in <code>src/util/err.rs</code>. New variants are added just-in-time as a level needs them.</p>
     <div class="err-table">
       <div class="row"><div class="v">InvalidHexChar(c)</div><div class="m">A character that is not a valid hex digit. · <strong>L1 L2 L3 L4 L5 L8</strong></div></div>
       <div class="row"><div class="v">OddLength</div><div class="m">A hex string with an odd number of characters. · <strong>hex decode — L1 L2 L3 L4 L5 L8</strong></div></div>
@@ -942,8 +1029,9 @@ pub fn pkcs7_unpad(data: &amp;[u8], block_size: usize) -&gt; Result&lt;Vec&lt;u8
       <div class="row"><div class="v">NoLines</div><div class="m">No candidate lines were supplied to inspect. · <strong>L4 L8</strong></div></div>
       <div class="row"><div class="v">EmptyKey</div><div class="m">The repeating-key operation has no key bytes. · <strong>util::xor — L5</strong></div></div>
       <div class="row"><div class="v">CiphertextTooShort(n)</div><div class="m">The base64-decoded ciphertext is too short to analyze. · <strong>L6</strong></div></div>
-      <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7</strong></div></div>
-      <div class="row"><div class="v">CiphertextNotBlockAligned(n)</div><div class="m">An AES ciphertext whose length is not a multiple of 16. · <strong>L7</strong></div></div>
+      <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7 L10</strong></div></div>
+      <div class="row"><div class="v">CiphertextNotBlockAligned(n)</div><div class="m">An AES ciphertext whose length is not a multiple of 16. · <strong>L7 L10</strong></div></div>
+      <div class="row"><div class="v">InvalidIvLength(n)</div><div class="m">An initialization vector that is not the 16 bytes a block-cipher mode requires. · <strong>L10</strong></div></div>
       <div class="row"><div class="v">NoRepeatedBlock</div><div class="m">No ciphertext line revealed the repeated-block signature of ECB. · <strong>L8</strong></div></div>
       <div class="row"><div class="v">InvalidBlockSize(n)</div><div class="m">A PKCS#7 block size outside <code>1..=255</code> was requested. · <strong>L9</strong></div></div>
       <div class="row"><div class="v">BadPadding(n)</div><div class="m">A buffer's PKCS#7 padding is malformed for its block size. · <strong>util::pad (pkcs7_unpad)</strong></div></div>
@@ -952,7 +1040,7 @@ pub fn pkcs7_unpad(data: &amp;[u8], block_size: usize) -&gt; Result&lt;Vec&lt;u8
 
   <footer>
     <p class="kicker">Source</p>
-    <p>One Rust crate. The library is <code>src/lib.rs</code> — just <code>pub mod sets</code> and <code>pub mod util</code>. Each level is a small module under <code>src/sets/set1/</code> or <code>src/sets/set2/</code> exposing a <code>solve</code> function and a <code>#[cfg(test)]</code> module with its own tests (unit and proptest property oracles). Shared primitives live in <code>src/util/</code>. The official challenge payloads ship under <code>data/challenge_04.txt</code>, <code>data/challenge_06.txt</code>, <code>data/challenge_07.txt</code> and <code>data/challenge_08.txt</code>. Re-run everything — format, tests and clippy — with <code>just gate</code>.</p>
+    <p>One Rust crate. The library is <code>src/lib.rs</code> — just <code>pub mod sets</code> and <code>pub mod util</code>. Each level is a small module under <code>src/sets/set1/</code> or <code>src/sets/set2/</code> exposing a <code>solve</code> function and a <code>#[cfg(test)]</code> module with its own tests (unit and proptest property oracles). Shared primitives live in <code>src/util/</code>. The official challenge payloads ship under <code>data/challenge_04.txt</code>, <code>data/challenge_06.txt</code>, <code>data/challenge_07.txt</code>, <code>data/challenge_08.txt</code> and <code>data/challenge_10.txt</code>. Re-run everything — format, tests and clippy — with <code>just gate</code>.</p>
   </footer>
 
   </main>
