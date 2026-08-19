@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 aes = "0.8"
 generic-array = "0.14"
+rand = "0.8"
 thiserror = "2"
 
 [dev-dependencies]

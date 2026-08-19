@@ -199,12 +199,12 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Set 1</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 97 unit + 9 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 111 unit + 10 doc tests</div>
 </div>
 
 <header class="hero">
   <p class="kicker">Cryptopals · Sets 1–2 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–2, Levels L1–L10 — annotated walkthrough</h1>
+  <h1>Sets 1–2, Levels L1–L11 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -212,10 +212,10 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>10</b> levels</span>
-    <span class="pill"><b>97</b> unit + <b>9</b> doc tests</span>
+    <span class="pill g"><b>11</b> levels</span>
+    <span class="pill"><b>111</b> unit + <b>10</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
-    <span class="pill">8 shared <b>util</b> modules</span>
+    <span class="pill">9 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
     <span class="pill">Set 2 · block ciphers</span>
   </div>
@@ -238,6 +238,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li class="set-head" aria-hidden="true">Set 2 · Block ciphers</li>
       <li><a href="#l9" data-toc><span class="n">L9</span>PKCS#7 padding</a></li>
       <li><a href="#l10" data-toc><span class="n">L10</span>Implement CBC mode</a></li>
+      <li><a href="#l11" data-toc><span class="n">L11</span>ECB/CBC detection oracle</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -1016,10 +1017,91 @@ pub fn solve(encrypted_b64: &amp;str, key: &amp;[u8], iv: &amp;[u8]) -&gt; Resul
     </div>
     <p class="files"><strong>Files</strong> <code>src/sets/set2/l002.rs</code><span class="sep">·</span> helper <code>util/cbc.rs</code> (+ <code>util/err.rs</code>: <code>InvalidIvLength</code>; payload <code>data/challenge_10.txt</code>)<span class="sep">·</span> tests: <code>util::cbc::decrypt</code> (5 unit, incl. two SP 800-38A KATs + a doctest) · <code>l002</code> (4 unit + 1 encrypt→decrypt round-trip property)</p>
   </section>
+
+  <section id="l11" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L11</span>
+      <h2>An ECB/CBC detection oracle</h2>
+      <span class="chip">set2::l003</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Now that you have ECB and CBC working: write a function that generates a random AES key (16 random bytes) and a function that encrypts data under a <em>random</em> key. Look like <code>encryption_oracle(input) → [jibber jabber]</code>. Under the hood, append 5–10 random bytes (count chosen at random) <em>before</em> the plaintext and 5–10 after it, then choose to encrypt under ECB 1/2 the time and under CBC the other half (random IVs for CBC). Detect the block-cipher mode the function is using <em>each time</em> — code that, pointed at a box that might be running ECB or CBC, tells you which one it is.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>ECB is stateless and deterministic, so two identical 16-byte plaintext blocks always yield two identical 16-byte ciphertext blocks (the leak you exploited back in L8). CBC's fresh IV and per-block chaining mean that essentially never happens. So the whole detector is: <em>does the ciphertext carry a repeated 16-byte block?</em> The only design question is how to get the repeat to show up <em>under the oracle's random prefix</em>, which shifts where each block boundary lands. The answer: feed the box a message with a long run of identical plaintext — 256 copies of <code>'A'</code> — so that no matter where the prefix drops, at least two whole 16-byte blocks are pure <code>'A'</code>, land on a 16-byte boundary, and line up with each other. Under ECB they encrypt to the same block (the signature appears); under CBC they do not.</p>
+    <div class="insight"><span class="tag">Core move</span><p>walk the ciphertext in 16-byte strides, put each block in a <code>HashSet</code>, and the first repeated block <strong>is</strong> ECB; if none repeats it's CBC.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>pub fn solve(input: &amp;[u8], rng: &amp;mut impl Rng) -&gt; BlockMode {
+    detect_mode(&amp;oracle(input, rng))
+}
+
+pub fn detect_mode(ct: &amp;[u8]) -&gt; BlockMode {
+    if has_repeated_block(ct) {
+        BlockMode::Ecb
+    } else {
+        BlockMode::Cbc
+    }
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>oracle</code> and <code>solve</code> take a generic <code>Rng</code> so tests can pass a seeded, deterministic stream; a real client threads its own (e.g. <code>thread_rng()</code>) — the oracle's key and IV are drawn but discarded so the box truly can't be inverted by hand.</li>
+      <li>The 5–10-byte random prefix shifts where block boundaries fall, but a long run of identical plaintext (<code>'A'.repeat(256)</code>) still produces at least two pure-aligned 16-byte blocks under ECB regardless of shift — enough to catch it; under CBC it never does.</li>
+      <li>Both block modes come from the primitives we hand-rolled: <code>util/aes::ecb_encrypt</code> (L11 needed the encrypt half; L007 kept its decrypt private) and <code>util/cbc::encrypt</code> (the mirror of L10's decrypt).</li>
+      <li>The one new runtime dependency is <code>rand</code> — the random key, prefix/suffix, and mode coin all come from it.</li>
+    </ul>
+
+    <details class="support">
+      <summary>supporting code · set2/l003 — build (the actual oracle internals)</summary>
+      <div class="body">
+        <p>Every draw is made through the injected RNG so a fixed seed fully determines the key, prefix, suffix, mode and IV:</p>
+        <div class="code-wrap"><pre><code>fn build(input: &amp;[u8], rng: &amp;mut impl Rng) -&gt; (Vec&lt;u8&gt;, BlockMode) {
+    let key = random_block(rng);
+    let prefix_len = rng.gen_range(5..=10);
+    let suffix_len = rng.gen_range(5..=10);
+    let prefix: Vec&lt;u8&gt; = (0..prefix_len).map(|_| rng.gen()).collect();
+    let suffix: Vec&lt;u8&gt; = (0..suffix_len).map(|_| rng.gen()).collect();
+    let mode = if rng.gen::&lt;bool&gt;() { BlockMode::Ecb } else { BlockMode::Cbc };
+
+    let mut plain = Vec::new();
+    plain.extend_from_slice(&amp;prefix);
+    plain.extend_from_slice(input);
+    plain.extend_from_slice(&amp;suffix);
+    let padded = pad::pkcs7_pad(&amp;plain, BLOCK).expect("block size is 16");
+
+    let ct = match mode {
+        BlockMode::Ecb =&gt; aes::ecb_encrypt(&amp;padded, &amp;key).expect("padded, 16-byte key"),
+        BlockMode::Cbc =&gt; {
+            let iv = random_block(rng);
+            cbc::encrypt(&amp;padded, &amp;key, &amp;iv).expect("padded, 16-byte key and iv")
+        }
+    };
+    (ct, mode)
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <p>Feed the detector a run of 256 <code>'A'</code>s, twice — once when the box happened to pick ECB and once when it picked CBC:</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">input</span><code>'A' × 256  (key and IV drawn randomly and thrown away)</code></div>
+      <div class="ex-row out"><span class="ex-k">ECB run</span><code>two of the aligned 'A' blocks are identical → their ciphertext blocks match → "ECB"</code></div>
+      <div class="ex-row"><span class="ex-k">CBC run</span><code>every block is fed (prev XOR …) starting from a fresh IV → all 17 blocks distinct → "CBC"</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>arbitrary caller bytes (here our 256-byte 'A' run) wrapped in 5–10 random bytes each side</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>"which mode did this box use?" → BlockMode::Ecb or BlockMode::Cbc, roughly 1/2 each — independent per call</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set2/l003.rs</code><span class="sep">·</span> helpers: new <code>util/aes.rs</code> (<code>ecb_encrypt</code>) · <code>util/cbc.rs</code> (<code>encrypt</code>) · <code>rand</code> dep · <code>util/err.rs</code>: <code>PlaintextNotBlockAligned</code><span class="sep">·</span> tests: <code>util::aes::ecb_encrypt</code> (4 unit + a doctest) · <code>util::cbc::encrypt</code> (3 unit + 1 fresh-IV property) · <code>l003</code> (5 unit + 1 cross-seed detect-oracle property)</p>
+  </section>
   <!-- Error type appendix -->
   <section id="errors" class="block">
     <h2>The error type</h2>
-    <p>Every <code>solve</code> either returns its answer or a single shared <code>CpalError</code>; fourteen variants, one per distinct failure mode the levels actually produce, in <code>src/util/err.rs</code>. New variants are added just-in-time as a level needs them.</p>
+    <p>Every <code>solve</code> either returns its answer or a single shared <code>CpalError</code>; fifteen variants, one per distinct failure mode the levels actually produce, in <code>src/util/err.rs</code>. New variants are added just-in-time as a level needs them.</p>
     <div class="err-table">
       <div class="row"><div class="v">InvalidHexChar(c)</div><div class="m">A character that is not a valid hex digit. · <strong>L1 L2 L3 L4 L5 L8</strong></div></div>
       <div class="row"><div class="v">OddLength</div><div class="m">A hex string with an odd number of characters. · <strong>hex decode — L1 L2 L3 L4 L5 L8</strong></div></div>
@@ -1029,9 +1111,10 @@ pub fn solve(encrypted_b64: &amp;str, key: &amp;[u8], iv: &amp;[u8]) -&gt; Resul
       <div class="row"><div class="v">NoLines</div><div class="m">No candidate lines were supplied to inspect. · <strong>L4 L8</strong></div></div>
       <div class="row"><div class="v">EmptyKey</div><div class="m">The repeating-key operation has no key bytes. · <strong>util::xor — L5</strong></div></div>
       <div class="row"><div class="v">CiphertextTooShort(n)</div><div class="m">The base64-decoded ciphertext is too short to analyze. · <strong>L6</strong></div></div>
-      <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7 L10</strong></div></div>
+      <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7 L10 L11</strong></div></div>
       <div class="row"><div class="v">CiphertextNotBlockAligned(n)</div><div class="m">An AES ciphertext whose length is not a multiple of 16. · <strong>L7 L10</strong></div></div>
-      <div class="row"><div class="v">InvalidIvLength(n)</div><div class="m">An initialization vector that is not the 16 bytes a block-cipher mode requires. · <strong>L10</strong></div></div>
+      <div class="row"><div class="v">PlaintextNotBlockAligned(n)</div><div class="m">A plaintext whose length is not a multiple of 16, so it can't be fed to a block-cipher mode. · <strong>L11</strong></div></div>
+      <div class="row"><div class="v">InvalidIvLength(n)</div><div class="m">An initialization vector that is not the 16 bytes a block-cipher mode requires. · <strong>L10 L11</strong></div></div>
       <div class="row"><div class="v">NoRepeatedBlock</div><div class="m">No ciphertext line revealed the repeated-block signature of ECB. · <strong>L8</strong></div></div>
       <div class="row"><div class="v">InvalidBlockSize(n)</div><div class="m">A PKCS#7 block size outside <code>1..=255</code> was requested. · <strong>L9</strong></div></div>
       <div class="row"><div class="v">BadPadding(n)</div><div class="m">A buffer's PKCS#7 padding is malformed for its block size. · <strong>util::pad (pkcs7_unpad)</strong></div></div>

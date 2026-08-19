@@ -5,7 +5,9 @@ We hand-roll the cryptography: every Set 1 level is built from `std` plus `thise
 (compile-time `Display`/`Error` derives for `CpalError`). The one exception is
 **Set 1 / Level 7** (AES-128 in ECB mode), which uses the
 [`aes`](https://docs.rs/aes) crate for the AES block primitive itself — plus its
-`generic-array` 16-byte wrapper.
+`generic-array` 16-byte wrapper. **Set 2 / Level 11** (the ECB/CBC detection oracle)
+adds a single runtime dependency, [`rand`](https://docs.rs/rand), to draw the oracle's
+random key, prefix/suffix and mode.
 
 Helpers are added **just-in-time** — only when a level actually needs one. No pre-stubbing.
 
@@ -22,7 +24,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 Or, if you have [just](https://github.com/casey/just), `just gate` runs the three
 in sequence (it's the default recipe). Others: `just test`, `just test-fuzz`,
 `just lvl set1 l003`, `just lint`, `just fmt`, `just doc` — or `just -l` for the
-full list. The suite is **97 unit + 9 doc tests** and growing one level at a time.
+full list. The suite is **111 unit + 10 doc tests** and growing one level at a time.
 
 `proptest` is a **dev-only** dependency used for property tests; it never ships in the crate.
 
@@ -53,8 +55,9 @@ src/
   util/               just-in-time shared helpers
     err.rs            CpalError
     hex.rs            from_hex (decode)
-    b64.rs            b64_encode / b64_decode
-    cbc.rs            cbc::decrypt (AES-128-CBC, hand-rolled chain)
+     b64.rs            b64_encode / b64_decode
+     aes.rs            aes::ecb_encrypt (AES-128-ECB, hand-rolled repeat)
+     cbc.rs            cbc::decrypt / cbc::encrypt (AES-128-CBC, hand-rolled chain)
     pad.rs            pkcs7_pad / pkcs7_unpad
     xor.rs            xor (byte-wise) + xore (repeating-key)
     freq.rs           english_score + best_single_byte_key
@@ -63,9 +66,9 @@ src/
     set1/
       l001.rs … l008.rs    Set 1, Levels 1–8
     set2/
-      l001.rs … l002.rs    Set 2, Levels 1–2 (PKCS#7, CBC)
+       l001.rs … l003.rs    Set 2, Levels 1–3 (PKCS#7, CBC, ECB/CBC oracle)
 docs/
-  index.html          self-contained HTML walkthrough of Sets 1–2, Levels L1–L10
+  index.html          self-contained HTML walkthrough of Sets 1–2, Levels L1–L11
 data/
   challenge_04.txt, challenge_06.txt, challenge_07.txt, challenge_08.txt,
   challenge_10.txt   official Cryptopals payloads read by their test modules

@@ -55,6 +55,11 @@ pub enum CpalError {
     #[error("initialization vector must be 16 bytes, got {0}")]
     InvalidIvLength(usize),
 
+    /// A plaintext to encrypt under a block mode that is not a whole number of 16-byte blocks
+    /// (i.e. the caller skipped the pad step).
+    #[error("plain text has {0} bytes, not a multiple of 16")]
+    PlaintextNotBlockAligned(usize),
+
     /// No ciphertext line revealed the repeated-block signature of ECB.
     #[error("no ciphertext line shows a repeated 16-byte block")]
     NoRepeatedBlock,
