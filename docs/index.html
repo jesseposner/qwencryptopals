@@ -198,13 +198,13 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 <body>
 
 <div class="topbar">
-  <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–2</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 153 unit + 21 doc tests</div>
+  <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–3</small></div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 170 unit + 25 doc tests</div>
 </div>
 
 <header class="hero">
-  <p class="kicker">Cryptopals · Sets 1–2 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–2, Levels L1–L16 — annotated walkthrough</h1>
+  <p class="kicker">Cryptopals · Sets 1–3 · Byte/Stream &amp; Block Ciphers</p>
+  <h1>Sets 1–3, Levels L1–L18 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -212,13 +212,13 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>17</b> levels</span>
-    <span class="pill"><b>158</b> unit + <b>23</b> doc tests</span>
+    <span class="pill g"><b>18</b> levels</span>
+    <span class="pill"><b>170</b> unit + <b>25</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
-    <span class="pill">9 shared <b>util</b> modules</span>
+    <span class="pill">10 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
     <span class="pill">Set 2 · block ciphers</span>
-    <span class="pill">Set 3 · the padding oracle</span>
+    <span class="pill">Set 3 · CTR &amp; the padding oracle</span>
   </div>
 </header>
 
@@ -245,8 +245,9 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l14" data-toc><span class="n">L14</span>Byte-at-a-time, harder</a></li>
       <li><a href="#l15" data-toc><span class="n">L15</span>Validate PKCS#7 padding</a></li>
       <li><a href="#l16" data-toc><span class="n">L16</span>Exploit mispadding (bit flip)</a></li>
-      <li class="set-head" aria-hidden="true">Set 3 · The padding oracle</li>
+      <li class="set-head" aria-hidden="true">Set 3 · CTR &amp; the padding oracle</li>
       <li><a href="#l17" data-toc><span class="n">L17</span>The CBC padding oracle</a></li>
+      <li><a href="#l18" data-toc><span class="n">L18</span>Implement CTR</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -274,16 +275,17 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Building blocks -->
   <section id="blocks" class="block">
     <h2>The building blocks</h2>
-    <p>Nine small modules in <code>src/util/</code> carry almost all of the work; each <code>solve</code> is then mostly glue. All of them operate on raw bytes — hex and base64 are only transport.</p>
+    <p>Ten small modules in <code>src/util/</code> carry almost all of the work; each <code>solve</code> is then mostly glue. All of them operate on raw bytes — hex and base64 are only transport.</p>
     <div class="blocks-table">
       <div class="row"><div class="mod">util::hex</div><div class="desc"><code>from_hex</code>: hex to <code>Vec&lt;u8&gt;</code>. The test oracles also hand-format bytes back to hex. <span class="lvl">· L1 · L2 · L3 · L4 · L5 · L8</span></div></div>
-      <div class="row"><div class="mod">util::b64</div><div class="desc">hand-rolled RFC 4640 <code>b64_encode</code> and <code>b64_decode</code>. <span class="lvl">· L1 · L6 · L7 · L14 · L17</span></div></div>
+      <div class="row"><div class="mod">util::b64</div><div class="desc">hand-rolled RFC 4640 <code>b64_encode</code> and <code>b64_decode</code>. <span class="lvl">· L1 · L6 · L7 · L14 · L17 · L18</span></div></div>
       <div class="row"><div class="mod">util::xor</div><div class="desc"><code>xor</code> (equal-length) and <code>xore</code> (repeating-key, cycles from the start). <span class="lvl">· L2 · L5 · L6</span></div></div>
       <div class="row"><div class="mod">util::freq</div><div class="desc"><code>english_score</code> and <code>best_single_byte_key</code> — the single-byte XOR attack. <span class="lvl">· L3 · L4 · L6</span></div></div>
       <div class="row"><div class="mod">util::entropy</div><div class="desc"><code>normalized_shannon_entropy</code>, in <code>[0,1]</code>; the key-length estimator. <span class="lvl">· L6</span></div></div>
       <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9 L10 L12 L13 L14 L15 L16 L17</span></div></div>
       <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13 L14</span></div></div>
       <div class="row"><div class="mod">util::cbc</div><div class="desc"><code>encrypt</code> and <code>decrypt</code> — hand-rolled CBC chaining over the AES core. <span class="lvl">· L10 L11 L16 L17</span></div></div>
+      <div class="row"><div class="mod">util::ctr</div><div class="desc"><code>ctr</code> — the AES-CTR keystream, one involutive function that both encrypts and decrypts; no chaining, no padding. <span class="lvl">· L18</span></div></div>
       <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
     </div>
   </section>
@@ -1630,6 +1632,76 @@ pub fn is_admin(ct: &amp;[u8]) -&gt; bool {
     </div>
     <p class="files"><strong>Files</strong> <code>src/sets/set3/l001.rs</code><span class="sep">·</span> helpers: <code>util/cbc</code> (<code>encrypt</code>, <code>decrypt</code>) · <code>util/pad</code> (<code>pkcs7_pad</code>, <code>pkcs7_unpad</code>) · <code>util/b64</code> (<code>b64_decode</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>mod padding_oracle_attack</code> (6 unit + 1 mint-any-cookie property) · doctests: <code>make_cookie</code>, <code>padding_oracle</code>, <code>solve</code></p>
   </section>
+
+  <!-- L18 -->
+  <section id="l18" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L18</span>
+      <h2>Implement CTR, the stream cipher mode</h2>
+      <span class="chip">set3::l002</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem</span>
+      <p class="official">Decrypt the blob at the top in CTR mode. CTR turns the AES block cipher into a stream cipher: instead of encrypting the plaintext, it encrypts a running 16-byte counter and XORs the resulting keystream against the data, and decrypting is the identical operation again. Base64 is only a transport — this is the cipher. The challenge fixes the parameters: key <code>YELLOW SUBMARINE</code>, nonce <code>0</code>, and a 16-byte counter built from an 8-byte nonce followed by an 8-byte little-endian block count.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>CBC chained each block to the previous <em>ciphertext</em>. CTR drops that feedback entirely and instead encodes a single monotone counter: the counter is fed through the AES block core, its 16-byte output is XORed against the next 16 bytes of the stream, and the counter rolls one for each block. Because the keystream depends on the key and the counter alone — not on the data — XOR is self-inverse and the same function that encrypts also decrypts. No chaining, no padding; when the stream ends mid-block, the last partial chunk just gets that many keystream bytes and stops.</p>
+    <div class="insight"><span class="tag">Core move</span><p>The counter is the only moving part: 8 fixed nonce bytes and a 8-byte little-endian block index starting at 0. Increment the index, encrypt its block under the key, XOR. Encrypt and decrypt are the <em>identical</em> function — the whole point of a stream cipher.</p></div>
+
+    <h3>The code</h3>
+    <p>The level is thin glue; the reusable keystream lives in <span class="muted">util::ctr</span>:</p>
+    <div class="code-wrap"><pre><code>pub fn ctr(stream: &amp;[u8], key: &amp;[u8], nonce: u64) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    if key.len() != BLOCK {
+        return Err(CpalError::InvalidKeyLength(key.len()));
+    }
+    let cipher = Aes128::new_from_slice(key).map_err(|_| CpalError::InvalidKeyLength(key.len()))?;
+    let prefix = nonce.to_le_bytes();
+
+    let mut out = Vec::with_capacity(stream.len());
+    for (i, chunk) in stream.chunks(BLOCK).enumerate() {
+        let mut counter = [0u8; BLOCK];
+        counter[..8].copy_from_slice(&amp;prefix);
+        counter[8..].copy_from_slice(&amp;(i as u64).to_le_bytes());
+
+        let mut keystream = GenericArray::clone_from_slice(&amp;counter);
+        cipher.encrypt_block(&amp;mut keystream);
+        for (j, &amp;b) in chunk.iter().enumerate() {
+            out.push(b ^ keystream[j]);
+        }
+    }
+    Ok(out)
+}</code></pre></div>
+    <p>And the level just b64-decodes the blob and hands it to that:</p>
+    <div class="code-wrap"><pre><code>pub fn solve(encrypted_b64: &amp;str, key: &amp;[u8], nonce: u64) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let ct = b64::b64_decode(encrypted_b64)?;
+    ctr::ctr(&amp;ct, key, nonce)
+}</code></pre></div>
+    <ul class="notes">
+      <li>The 16-byte counter is exactly the layout the challenge specifies: an 8-byte nonce in the low half and an 8-byte little-endian <em>block count</em> in the high half. The counter starts at 0 and rolls 16 bytes per block; after <code>i</code> blocks the low half carries <code>i</code>.</li>
+      <li>CTR is <em>involutive</em> — <code>ctr(ctr(x, k, n), k, n) == x</code>. There is no unpadding step, because there was never any padding: the stream simply stops when the stream ends, and the last partial block is XORed against just as many keystream bytes.</li>
+      <li>It reuses the same AES-128 block core that <code>util/aes</code> and <code>util/cbc</code> already wrap (<code>Aes128::encrypt_block</code>). The only new idea is XORing a counter instead of chaining ciphertext. No new <code>CpalError</code> variant — the only failure mode <code>ctr</code> can raise is a bad key length.</li>
+      <li>The test asserts a printable-ASCII ratio and only a trivial prefix, so the recovered text is never reproduced in the source. An all-zero 16-byte stream under nonce 0 is cross-checked against plain <code>ecb_encrypt</code> of the same sixteen zero bytes, verifying the counter layout without duplicating the AES work.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>The official blob is 52 raw bytes: three full 16-byte blocks plus a 4-byte tail. The counter walks 0 → 3; every chunk XORed against the AES-encrypted counter block.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">block 0</span><code>counter = 00·00·00·00·00·00·00·00 || 00·00·00·00·00·00·00·00 → keystream</code></div>
+      <div class="ex-row"><span class="ex-k">block 1</span><code>counter = 00·00·00·00·00·00·00·00 || 01·00·00·00·00·00·00·00 → next 16 bytes of keystream</code></div>
+      <div class="ex-row"><span class="ex-k">tail</span><code>block 3 = 4 bytes: XOR only those 4 against the first 4 of that block's keystream — stop, don't pad</code></div>
+      <div class="ex-row out"><span class="ex-k">decrypt</span><code>run the identical counter 0 → 3 over the ciphertext, XOR again → the plaintext</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>base64 of a 52-byte CTR stream under key <span class="muted">b"YELLOW SUBMARINE"</span>, nonce 0</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve(blob, &amp;KEY, NONCE)</span> → <span class="muted">Ok(52 bytes)</span>: roughly English; a wrong-length key → <span class="muted">Err(InvalidKeyLength(n))</span></code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l002.rs</code><span class="sep">·</span> helpers: <code>util/ctr</code> (<code>ctr</code>, the reusable AES-CTR keystream) · <code>util/b64</code> (<code>b64_decode</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>util::ctr::ctr_fn</code> (6 unit + 1 CTR involutivity property) · <code>set3::l002::solve</code> (4 unit + 1 base64→solve round-trip property) · doctests: <code>ctr</code> on L18, <code>solve</code></p>
+  </section>
+
   <!-- Error type appendix -->
   <section id="errors" class="block">
     <h2>The error type</h2>
@@ -1643,7 +1715,7 @@ pub fn is_admin(ct: &amp;[u8]) -&gt; bool {
       <div class="row"><div class="v">NoLines</div><div class="m">No candidate lines were supplied to inspect. · <strong>L4 L8</strong></div></div>
       <div class="row"><div class="v">EmptyKey</div><div class="m">The repeating-key operation has no key bytes. · <strong>util::xor — L5</strong></div></div>
       <div class="row"><div class="v">CiphertextTooShort(n)</div><div class="m">The base64-decoded ciphertext is too short to analyze. · <strong>L6</strong></div></div>
-      <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7 L10 L11 L13</strong></div></div>
+      <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7 L10 L11 L13 L18</strong></div></div>
       <div class="row"><div class="v">CiphertextNotBlockAligned(n)</div><div class="m">An AES ciphertext whose length is not a multiple of 16. · <strong>L7 L10 L13 L17</strong></div></div>
       <div class="row"><div class="v">PlaintextNotBlockAligned(n)</div><div class="m">A plaintext whose length is not a multiple of 16, so it can't be fed to a block-cipher mode. · <strong>L11</strong></div></div>
       <div class="row"><div class="v">InvalidIvLength(n)</div><div class="m">An initialization vector that is not the 16 bytes a block-cipher mode requires. · <strong>L10 L11</strong></div></div>

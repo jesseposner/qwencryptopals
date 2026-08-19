@@ -6,6 +6,7 @@
 pub mod aes;
 pub mod b64;
 pub mod cbc;
+pub mod ctr;
 pub mod entropy;
 pub mod err;
 pub mod freq;
