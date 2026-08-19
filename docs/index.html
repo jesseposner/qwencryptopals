@@ -199,12 +199,12 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–3</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 181 unit + 29 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 187 unit + 30 doc tests</div>
 </div>
 
 <header class="hero">
   <p class="kicker">Cryptopals · Sets 1–3 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–3, Levels L1–L19 — annotated walkthrough</h1>
+  <h1>Sets 1–3, Levels L1–L20 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -212,8 +212,8 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>19</b> levels</span>
-    <span class="pill"><b>181</b> unit + <b>29</b> doc tests</span>
+    <span class="pill g"><b>20</b> levels</span>
+    <span class="pill"><b>187</b> unit + <b>30</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">10 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
@@ -249,6 +249,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l17" data-toc><span class="n">L17</span>The CBC padding oracle</a></li>
       <li><a href="#l18" data-toc><span class="n">L18</span>Implement CTR</a></li>
       <li><a href="#l19" data-toc><span class="n">L19</span>Break fixed-nonce CTR</a></li>
+      <li><a href="#l20" data-toc><span class="n">L20</span>Detect block cipher mode</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -258,7 +259,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the nineteen levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the twenty levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -1778,6 +1779,76 @@ pub fn solve(ciphertexts: &amp;[Vec&lt;u8&gt;], known_ct: &amp;[u8], known_pt: &
       <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve(&amp;ciphers(), &amp;c[longest], LINES[longest])</span> → <span class="muted">Vec&lt;40 × Vec&lt;u8&gt;&gt;</span>: the recovered plaintext bytes; each equals its original line byte-for-byte</code></div>
     </div>
     <p class="files"><strong>Files</strong> <code>src/sets/set3/l003.rs</code><span class="sep">·</span> helpers: <code>util/ctr</code> (<code>ctr</code> from L18 + new <code>shared_keystream</code>, <code>recover</code>) — <em>no new error variant, no new data file</em><span class="sep">·</span> tests: <code>util::ctr::reuse_fn</code> (3 unit + 2 property, the keystream-reuse invariants) · <code>set3::l003::recovery</code> (5 unit, incl. the full 40-line end-to-end recovery + 1 independent-CTR recovery property) · doctests: <code>shared_keystream</code>, <code>recover</code>, <code>ciphers</code>, <code>solve</code></p>
+  </section>
+
+  <section id="l20" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L20</span>
+      <h2>Detect block cipher mode</h2>
+      <span class="chip">set3::l004</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem</span>
+      <p class="official">Here are eighty 64-byte AES-128 ciphertexts, base64, each encrypted under a fresh random key you will never see. Half were made in ECB and half in CBC, interleaved. There is no key to recover and no oracle to query — you can only look. For every line, decide which mode produced it.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>The one difference that surfaces in the <em>ciphertext itself</em>, without a key, is whether blocks repeat. ECB is a stateless, deterministic function of each block: two identical 16-byte plaintext blocks become two identical 16-byte ciphertext blocks. CBC chains every block through the previous ciphertext and a fresh random IV, so two identical plaintext blocks land in two <strong>different</strong> ciphertext blocks. So the test is a single scan: does any 16-byte block appear twice? A repeat means ECB; no repeat means CBC. It is the very rule <a href="#l8"><code>L8</code></a> and <a href="#l11"><code>L11</code></a> already rely on, this time applied to a stored batch instead of a live oracle.</p>
+    <div class="insight"><span class="tag">Core move</span><p>Look for the repeated 16-byte block. Repeat ⇒ ECB, no repeat ⇒ CBC. No key, no oracle — the mode is written into the ciphertext blocks themselves, because only the deterministic mode preserves block equalities.</p></div>
+
+    <h3>The code</h3>
+    <p>The entire answer is a five-line scan plus a map of it over the batch. The detector is re-implemented here (rather than imported from L11) so the set3 module stays decoupled, and the batch is minted in the crate the way L19 mints its lines:</p>
+    <div class="code-wrap"><pre><code>pub fn classify(ct: &amp;[u8]) -&gt; BlockMode {
+    if has_repeated_block(ct) { BlockMode::Ecb } else { BlockMode::Cbc }
+}
+
+fn has_repeated_block(ct: &amp;[u8]) -&gt; bool {
+    let mut seen = std::collections::HashSet::new();
+    for block in ct.chunks_exact(BLOCK) {
+        if !seen.insert(block) {
+            return true;   // a 16-byte block already seen → deterministic mode
+        }
+    }
+    false
+}
+
+pub fn classify_batch(cts: &amp;[&amp;[u8]]) -&gt; Vec&lt;BlockMode&gt; {
+    cts.iter().map(|ct| classify(ct)).collect()
+}</code></pre></div>
+    <p>The batch is generated with a seeded key and IV per line: an ECB line repeats one 16-byte block four times; a CBC line uses four distinct blocks. The invariant each line must satisfy is pinned the moment it is minted, so the batch cannot silently stop classifying correctly:</p>
+    <div class="code-wrap"><pre><code>fn build(batch: usize, seed: u64) -&gt; (Vec&lt;Vec&lt;u8&gt;&gt;, Vec&lt;BlockMode&gt;) {
+    let mut rng = StdRng::seed_from_u64(seed);
+    ...
+    let ecb = i % 2 == 0;
+    let plain = if ecb { /* one 16-byte block, repeated ×4 */ }
+                else { /* four distinct 16-byte blocks */ };
+    let ct = if ecb { aes::ecb_encrypt(&amp;plain, &amp;key)? }
+             else { let iv = random(16); cbc::encrypt(&amp;plain, &amp;key, &amp;iv)? };
+    debug_assert_eq!(classify(&amp;ct), mode);   // ECB repeats, CBC does not
+    ...
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>classify_batch</code> <em>is</em> the solve: it maps the one-line detector over the batch. For the minted data its output equals the mode each line was built under, by construction — so the headline test only compares two <code>Vec&lt;BlockMode&gt;</code> values.</li>
+      <li>A second sanity check reuses <span class="muted">util::entropy</span>: an ECB line is four copies of one block — a narrow byte-value histogram, low Shannon entropy — while a CBC line spreads near-uniformly. Averaging all 40 of each, the ECB mean sits a wide margin below the CBC mean.</li>
+      <li>No new <code>CpalError</code> variant, no new data file: the eighty ciphertexts are minted in the crate from a seeded RNG, the way L17 mints its cookies and L19 mints its lines.</li>
+      <li>The detector is re-implemented rather than imported from L11. Keeping it local preserves the rule that each set module depends only on <span class="muted">util</span> — no cross-set import of <code>set2::l003::detect_mode</code>.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>Even line 0 (ECB): its 64-byte plaintext is one shared block repeated four times, so ECB emits four identical 16-byte ciphertext blocks — the scan finds a repeat at offsets 0/16/32/48 and reports <code>BlockMode::Ecb</code>. Line 1 (CBC): four distinct blocks under a fresh IV; no two ciphertext blocks agree, so <code>BlockMode::Cbc</code>. Of the 80 lines minted at seed 0, exactly the 40 even ones read ECB.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">L0 (ECB)</span><code>ct[0:16] == ct[16:32] == ct[32:48] == ct[48:64]  <span class="muted">→ BlockMode::Ecb</span></code></div>
+      <div class="ex-row"><span class="ex-k">L1 (CBC)</span><code>no two 16-byte slices agree  <span class="muted">→ BlockMode::Cbc</span></code></div>
+      <div class="ex-row out"><span class="ex-k">count</span><code><span class="solve">classify_batch</span>(mints) = [Ecb, Cbc, Ecb, Cbc, …]  →  40 × Ecb, 40 × Cbc</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>80 lines of 64-byte AES-128 ciphertext, 40 ECB + 40 CBC under seeded random keys — minted in-crate by <span class="solve">mint(80, 0)</span></code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">classify_batch</span>(mints) → <span class="muted">Vec&lt;BlockMode&gt;</span> (80 entries): even indices <span class="muted">Ecb</span>, odd <span class="muted">Cbc</span> — 40/40 correct each way</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l004.rs</code><span class="sep">·</span> helpers: <code>util/aes</code> (<code>ecb_encrypt</code>) · <code>util/cbc</code> (<code>encrypt</code>) · <code>util/entropy</code> (<code>normalized_shannon_entropy</code>) — <em>no new error variant, no new data file</em><span class="sep">·</span> tests: <code>mod solve</code> (5 unit: the ecb/cbc pair, the &lt;2-block edge, the full-80 recovery + 40-count, the 64-byte shape, the ECB&lt;CBC entropy gap · 1 property: <code>classify_batch</code> matches the minted mode across every <code>(seed, batch)</code> pair) · doctest: <code>mint</code></p>
   </section>
 
   <!-- Error type appendix -->
