@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Annotated walkthrough of all thirteen Cryptopals Set 1–2 challenges, wired to the actual Rust code in the qwencryptopals crate.">
+<meta name="description" content="Annotated walkthrough of all fourteen Cryptopals Set 1–2 challenges, wired to the actual Rust code in the qwencryptopals crate.">
 <meta name="color-scheme" content="dark">
 <title>Cryptopals Sets 1–2 · Annotated Walkthrough</title>
 <style>
@@ -199,12 +199,12 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–2</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 133 unit + 16 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 141 unit + 17 doc tests</div>
 </div>
 
 <header class="hero">
   <p class="kicker">Cryptopals · Sets 1–2 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–2, Levels L1–L13 — annotated walkthrough</h1>
+  <h1>Sets 1–2, Levels L1–L14 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -213,7 +213,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   </p>
   <div class="pills">
     <span class="pill g"><b>13</b> levels</span>
-    <span class="pill"><b>133</b> unit + <b>16</b> doc tests</span>
+    <span class="pill"><b>141</b> unit + <b>17</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">9 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
@@ -241,6 +241,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l11" data-toc><span class="n">L11</span>ECB/CBC detection oracle</a></li>
       <li><a href="#l12" data-toc><span class="n">L12</span>Byte-at-a-time ECB</a></li>
       <li><a href="#l13" data-toc><span class="n">L13</span>ECB cut-and-paste</a></li>
+      <li><a href="#l14" data-toc><span class="n">L14</span>Byte-at-a-time, harder</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -250,7 +251,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the thirteen levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the fourteen levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -271,12 +272,12 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <p>Nine small modules in <code>src/util/</code> carry almost all of the work; each <code>solve</code> is then mostly glue. All of them operate on raw bytes — hex and base64 are only transport.</p>
     <div class="blocks-table">
       <div class="row"><div class="mod">util::hex</div><div class="desc"><code>from_hex</code>: hex to <code>Vec&lt;u8&gt;</code>. The test oracles also hand-format bytes back to hex. <span class="lvl">· L1 · L2 · L3 · L4 · L5 · L8</span></div></div>
-      <div class="row"><div class="mod">util::b64</div><div class="desc">hand-rolled RFC 4640 <code>b64_encode</code> and <code>b64_decode</code>. <span class="lvl">· L1 · L6 · L7</span></div></div>
+      <div class="row"><div class="mod">util::b64</div><div class="desc">hand-rolled RFC 4640 <code>b64_encode</code> and <code>b64_decode</code>. <span class="lvl">· L1 · L6 · L7 · L14</span></div></div>
       <div class="row"><div class="mod">util::xor</div><div class="desc"><code>xor</code> (equal-length) and <code>xore</code> (repeating-key, cycles from the start). <span class="lvl">· L2 · L5 · L6</span></div></div>
       <div class="row"><div class="mod">util::freq</div><div class="desc"><code>english_score</code> and <code>best_single_byte_key</code> — the single-byte XOR attack. <span class="lvl">· L3 · L4 · L6</span></div></div>
       <div class="row"><div class="mod">util::entropy</div><div class="desc"><code>normalized_shannon_entropy</code>, in <code>[0,1]</code>; the key-length estimator. <span class="lvl">· L6</span></div></div>
-      <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9 L10 L13</span></div></div>
-      <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13</span></div></div>
+      <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9 L10 L12 L13 L14</span></div></div>
+      <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13 L14</span></div></div>
       <div class="row"><div class="mod">util::cbc</div><div class="desc"><code>encrypt</code> and <code>decrypt</code> — hand-rolled CBC chaining over the AES core. <span class="lvl">· L10 L11</span></div></div>
       <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
     </div>
@@ -1280,6 +1281,113 @@ fn crafted_email() -&gt; String {
       <div class="io-row"><span class="io-k out">output</span><code>the 3-block forged cookie; auth(cookie) == Ok(()) and role == "admin" — no key ever used</code></div>
     </div>
     <p class="files"><strong>Files</strong> <code>src/sets/set2/l005.rs</code><span class="sep">·</span> helpers: <code>util/aes</code> (<code>ecb_encrypt</code> + new <code>ecb_decrypt</code>) · <code>util/pad</code> · <code>util/err</code>: <code>AuthFailed</code><span class="sep">·</span> tests: <code>mod cut_and_paste</code> (9 unit + 2 property) · doctests: <code>parse_kv</code>, <code>profile_for</code>, <code>encrypt_profile</code>, <code>solve</code> · <code>util::aes::ecb_decrypt</code> (3 unit + 1 property + doctest)</p>
+  </section>
+  <section id="l14" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L14</span>
+      <h2>Byte-at-a-time ECB decryption (harder)</h2>
+      <span class="chip">set2::l006</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Same setup as L12 — a box that returns <code>AES-128-ECB(unknown-string, random-key)</code> for a consistent-but-unknown key, appending the same base64 secret from L12 and taking your input — except now it prepends a <em>random amount of random bytes</em> to every plaintext <em>before</em> encrypting. Decryption is a lot harder. It's still <code>AES-128-ECB(random-bytes || your-string || unknown-string, random-key)</code>. You can recover it, though: with a random prefix, you first need to determine how many bytes it is. Once you've done that, byte-at-a-time ECB decryption is trivial.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>L12's only enemy was a secret the box tacked on the end; here a second enemy sits up front — a random prefix whose length the caller can't see. That matters because L12's alignment counted filler from the very front of the plaintext, and a random prefix of length <code>P</code> off-block shifts where <em>every</em> boundary falls. So the attack splits into two moves. First, measure <code>P</code>: ciphertext length is always <code>(P + input + n)</code> rounded up to a multiple of 16, where <code>n</code> is the secret's length. Probing <code>0..=16</code> input lengths walks every residue mod 16, so the minimum of <code>ct.len() - input.len()</code> is <code>P + n + 1</code> — and the attacker already knows <code>n</code> (the blob was handed to it, so it decodes it and reads its length), leaving <code>P = that minimum − 1 − n</code>. Second, run L12's byte-at-a-time core past the prefix: for the byte at position <code>k</code>, the fifteen known plain bytes before it are controlled filler plus already-recovered bytes (<code>FILLER^(15−m)</code> ++ <code>recovered[k−m..k]</code>, <code>m = min(k,15)</code>), and the filler length is chosen not merely to <em>align</em> that byte on a block's final position <code>(P + left + k) ≡ 15 mod 16</code> but to be long enough that those fifteen bytes stay inside attacker-controlled territory, never the unknown prefix. Read that block off the observed ciphertext, probe it against all 256 candidates, keep the match, and slide forward exactly as in L12.</p>
+    <div class="insight"><span class="tag">Core move</span><p>discover the random prefix's length from the length staircase (<code>min(ct.len() − input.len()) − 1 − n</code>), then run L12's byte-at-a-time attack with filler that both aligns byte <code>k</code> to a block boundary <em>and</em> is long enough that the fifteen known bytes before it never touch the prefix.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>pub fn oracle(input: &amp;[u8]) -&gt; Vec&lt;u8&gt; {
+    let mut plain = Vec::with_capacity(PREFIX.len() + input.len() + target_bytes().len());
+    plain.extend_from_slice(&amp;PREFIX);
+    plain.extend_from_slice(input);
+    plain.extend_from_slice(&amp;target_bytes());
+    let padded = pad::pkcs7_pad(&amp;plain, BLOCK).expect("block size 16 is inside 1..=255");
+    aes::ecb_encrypt(&amp;padded, &amp;KEY).expect("padded, 16-byte key")
+}
+
+pub fn solve() -&gt; Vec&lt;u8&gt; {
+    let unknown = target_bytes().len();
+    let prefix = prefix_len(&amp;unknown);
+    recover(unknown, prefix, &amp;|input| oracle(input))
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>oracle</code> is the L12 box plus a prepend: a fixed random <code>PREFIX</code> sits in front of your input (constant only so the challenge is reproducible; its real length is discovered, never read), then the L12 unknown string at the back. <code>solve</code> first counts the prefix (<code>prefix_len</code>) and then reads the secret off one byte at a time (<code>recover</code>).</li>
+      <li>The length staircase is the whole trick: <code>min(ct.len() − input.len())</code> over a full set of residues is <code>P + n + 1</code>, so <code>P = min − 1 − n</code>. The attacker knows <code>n</code> because it was handed the base64 blob to decode.</li>
+      <li>No new <code>CpalError</code> variant is needed: once the prefix length is known, the attack is deterministic — for a block's final byte exactly one of 256 candidates reproduces the observed block — so every slice is in-bounds and the probe loop is guaranteed to hit its <code>break</code>.</li>
+      <li><code>KEY</code> and <code>PREFIX</code> are fixed constants only for reproducibility and are never exposed or read back; the same "draw the key, then stop using it" move as L11–L13.</li>
+      <li>Everything reuses existing <code>util/</code> primitives — <code>b64::b64_decode</code>, <code>pad::pkcs7_pad</code>, <code>aes::ecb_encrypt</code> — so L14 adds no new module and no new dependency.</li>
+    </ul>
+
+    <details class="support">
+      <summary>supporting code · set2/l006 — prefix_len + recover (prefix discovery &amp; prefix-aware byte-at-a-time)</summary>
+      <div class="body">
+        <p>Count the prefix from the length staircase, then, for byte <code>k</code>, pick the shortest filler length that both aligns it to a block's final position <code>(P + left + k) % 16 == 15</code> and stays out of the prefix; probe all 256 candidates on that same block.</p>
+        <div class="code-wrap"><pre><code>fn prefix_len(unknown: &amp;usize) -&gt; usize {
+    let total = (0..=BLOCK)
+        .map(|len| oracle(&amp;vec![FILLER; len]).len() - len)
+        .min()
+        .expect("at least one sample")
+        - 1;
+    total - unknown
+}
+
+fn recover(total: usize, prefix_len: usize, enc: &amp;dyn Fn(&amp;[u8]) -&gt; Vec&lt;u8&gt;) -&gt; Vec&lt;u8&gt; {
+    let mut recovered = Vec::with_capacity(total);
+    for k in 0..total {
+        let m = k.min(BLOCK - 1);
+        let mut known15 = vec![FILLER; BLOCK - 1 - m];
+        known15.extend_from_slice(&amp;recovered[k - m..k]);
+
+        let min_left = if k &lt; BLOCK { BLOCK - 1 - k } else { 0 };
+        let mut left = 0;
+        while (prefix_len + left + k) % BLOCK != BLOCK - 1 {
+            left += 1;
+        }
+        if left &lt; min_left {
+            left += BLOCK;
+        }
+
+        let block = (prefix_len + left + k) / BLOCK;
+        let observed = enc(&amp;vec![FILLER; left]);
+        let observed_block = &amp;observed[block * BLOCK..block * BLOCK + BLOCK];
+
+        let probe_left = left + k - (BLOCK - 1);
+        let mut cand = vec![FILLER; probe_left];
+        cand.extend_from_slice(&amp;known15);
+        cand.push(0);
+        let last = cand.len() - 1;
+        for c in 0..=u8::MAX {
+            cand[last] = c;
+            let probe = &amp;enc(&amp;cand)[block * BLOCK..block * BLOCK + BLOCK];
+            if probe == observed_block {
+                recovered.push(c);
+                break;
+            }
+        }
+    }
+    recovered
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <p>Here the random prefix is 15 bytes and the secret is the 138-byte L12 string. The staircase gives <code>min(ct.len() − input.len()) = 154</code>, so <code>P + n = 153</code> and, knowing <code>n = 138</code>, <code>P = 15</code>. Then byte 0 is aligned with <code>left = 16</code> (the smallest filler that puts it on a block's final position past the prefix) and read off from block 1; the window then slides exactly like L12.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">measure</span><code>feed filler of length 0..=16 → min(ct − input) = 154 → P + n = 153; n = 138 → P = 15</code></div>
+      <div class="ex-row"><span class="ex-k">k = 0</span><code>left = 16 so (15 + 16 + 0) % 16 = 15 → block 1 = ('A'×15) + secret[0]; probe 256, one matches</code></div>
+      <div class="ex-row out"><span class="ex-k">k = 16</span><code>block 1 is full; the known-15 are the last 15 recovered bytes → secret[16] lands in block 2. Slide forward.</code></div>
+      <div class="ex-row"><span class="ex-k">k = 137</span><code>the 138th byte; assemble all recovered bytes → the full secret, past the 15-byte prefix</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>the challenge's fixed secret, passed to the box in base64 (decoded in code, never by hand) → 138 bytes, always prefixed by a random 15-byte run</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>Rollin' in my 5.0\nWith my rag-top down so my hair can blow\nThe girls on standby waving just to say hi\nDid you stop? No, I just drove by\n (138 bytes, recovered past the unknown prefix)</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set2/l006.rs</code><span class="sep">·</span> helpers: <code>util/b64</code> · <code>util/pad</code> · <code>util/aes</code> (<code>ecb_encrypt</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>mod solve</code> (6 unit + 1 behind-any-prefix property) · doctest: <code>oracle</code></p>
   </section>
   <!-- Error type appendix -->
   <section id="errors" class="block">
