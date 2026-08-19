@@ -24,7 +24,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 Or, if you have [just](https://github.com/casey/just), `just gate` runs the three
 in sequence (it's the default recipe). Others: `just test`, `just test-fuzz`,
 `just lvl set1 l003`, `just lint`, `just fmt`, `just doc` — or `just -l` for the
-full list. The suite is **111 unit + 10 doc tests** and growing one level at a time.
+full list. The suite is **118 unit + 11 doc tests** and growing one level at a time.
 
 `proptest` is a **dev-only** dependency used for property tests; it never ships in the crate.
 
@@ -65,10 +65,10 @@ src/
   sets/
     set1/
       l001.rs … l008.rs    Set 1, Levels 1–8
-    set2/
-       l001.rs … l003.rs    Set 2, Levels 1–3 (PKCS#7, CBC, ECB/CBC oracle)
-docs/
-  index.html          self-contained HTML walkthrough of Sets 1–2, Levels L1–L11
+     set2/
+        l001.rs … l004.rs    Set 2, Levels 1–4 (PKCS#7, CBC, ECB/CBC oracle, byte-at-a-time ECB)
+ docs/
+   index.html          self-contained HTML walkthrough of Sets 1–2, Levels L1–L12
 data/
   challenge_04.txt, challenge_06.txt, challenge_07.txt, challenge_08.txt,
   challenge_10.txt   official Cryptopals payloads read by their test modules

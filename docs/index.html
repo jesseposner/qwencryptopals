@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Annotated walkthrough of all eight Cryptopals Set 1 challenges, wired to the actual Rust code in the qwencryptopals crate.">
+<meta name="description" content="Annotated walkthrough of all twelve Cryptopals Set 1–2 challenges, wired to the actual Rust code in the qwencryptopals crate.">
 <meta name="color-scheme" content="dark">
-<title>Cryptopals Set 1 · Annotated Walkthrough</title>
+<title>Cryptopals Sets 1–2 · Annotated Walkthrough</title>
 <style>
 :root{
   --bg:#0f172a; --bg-2:#0b1120; --panel:#1e293b; --panel-2:#16202f;
@@ -198,13 +198,13 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 <body>
 
 <div class="topbar">
-  <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Set 1</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 111 unit + 10 doc tests</div>
+  <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–2</small></div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 118 unit + 11 doc tests</div>
 </div>
 
 <header class="hero">
   <p class="kicker">Cryptopals · Sets 1–2 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–2, Levels L1–L11 — annotated walkthrough</h1>
+  <h1>Sets 1–2, Levels L1–L12 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -212,8 +212,8 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>11</b> levels</span>
-    <span class="pill"><b>111</b> unit + <b>10</b> doc tests</span>
+    <span class="pill g"><b>12</b> levels</span>
+    <span class="pill"><b>118</b> unit + <b>11</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">9 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
@@ -239,6 +239,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l9" data-toc><span class="n">L9</span>PKCS#7 padding</a></li>
       <li><a href="#l10" data-toc><span class="n">L10</span>Implement CBC mode</a></li>
       <li><a href="#l11" data-toc><span class="n">L11</span>ECB/CBC detection oracle</a></li>
+      <li><a href="#l12" data-toc><span class="n">L12</span>Byte-at-a-time ECB</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -248,7 +249,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the nine levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the twelve levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -1097,6 +1098,102 @@ pub fn detect_mode(ct: &amp;[u8]) -&gt; BlockMode {
       <div class="io-row"><span class="io-k out">output</span><code>"which mode did this box use?" → BlockMode::Ecb or BlockMode::Cbc, roughly 1/2 each — independent per call</code></div>
     </div>
     <p class="files"><strong>Files</strong> <code>src/sets/set2/l003.rs</code><span class="sep">·</span> helpers: new <code>util/aes.rs</code> (<code>ecb_encrypt</code>) · <code>util/cbc.rs</code> (<code>encrypt</code>) · <code>rand</code> dep · <code>util/err.rs</code>: <code>PlaintextNotBlockAligned</code><span class="sep">·</span> tests: <code>util::aes::ecb_encrypt</code> (4 unit + a doctest) · <code>util::cbc::encrypt</code> (3 unit + 1 fresh-IV property) · <code>l003</code> (5 unit + 1 cross-seed detect-oracle property)</p>
+  </section>
+
+  <section id="l12" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L12</span>
+      <h2>Byte-at-a-time ECB decryption</h2>
+      <span class="chip">set2::l004</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Copy your oracle to a new function that encrypts buffers under <em>ECB</em> mode using a <em>consistent but unknown</em> key (a single key, assigned once, never revealed). Have it append, <em>before encrypting</em>, the secret below — base64-decode it <em>in code, not by hand</em>, so its contents stay unknown. What you now have is <code>AES-128-ECB(your-string || unknown-string, random-key)</code>. It turns out: you can decrypt that <em>unknown-string</em> with repeated calls to the oracle. Discover the block size, detect that it is ECB, then — knowing the block size — line each next unknown byte up as the last byte of a block, build a dictionary of every possible last byte, match, and repeat for the next byte. This is the first challenge whose solution breaks real crypto: ECB looks like penguins through glass, and now you can read the penguins.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>ECB is per-block and deterministic, so two identical 16-byte plaintext blocks always yield two identical ciphertext blocks — the leak L8 exposed and L11 learned to detect. Here there is no random prefix to fight and no mode to detect (the box is locked to ECB under a fixed key); the only enemy is a secret the box silently tacks on the end of everything you send. The whole attack is <em>alignment</em>. For the byte at position <code>k</code> you already control, or have recovered, the fifteen plain bytes immediately before it. Pad them out to a full block so the unknown byte <code>k</code> lands exactly on that block's final position, ask the oracle what ciphertext block that produces, and — since you don't yet know that last byte — probe it: re-run the oracle on that known-15 block plus each of the 256 possible last bytes and keep the one whose first block matches. Do that for <code>k = 0</code>, then <code>1</code>, then <code>2</code>, … and the unknown string decodes itself, byte by byte.</p>
+    <div class="insight"><span class="tag">Core move</span><p>line the next unknown byte up as the final byte of a 16-byte block whose other fifteen bytes you already know (controlled filler for the first block, earlier recovered bytes thereafter), then brute-force that byte across <code>0</code>–<code>255</code> by re-invoking the oracle; whichever candidate reproduces the observed block is the byte. Slide the window forward one byte and the whole unknown string falls out.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>pub fn oracle(input: &amp;[u8]) -&gt; Vec&lt;u8&gt; {
+    let mut plain = input.to_vec();
+    plain.extend_from_slice(&amp;target_bytes());
+    let padded = pad::pkcs7_pad(&amp;plain, BLOCK).expect("block size 16 is inside 1..=255");
+    aes::ecb_encrypt(&amp;padded, &amp;KEY).expect("padded, 16-byte key")
+}
+
+pub fn solve() -&gt; Vec&lt;u8&gt; {
+    recover(unknown_len(), &amp;|input| oracle(input))
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>oracle</code> is the black box: append the unknown string, PKCS#7-pad to 16, encrypt under the fixed ECB <code>KEY</code>, and return only ciphertext. <code>solve</code> is a two-line driver — discover how many bytes the box appends (<code>unknown_len</code>), then read them off one at a time (<code>recover</code>) — and is the headline answer.</li>
+      <li>No new <code>CpalError</code> variant is needed: the attack is deterministic — for the final byte of a block, exactly one of the 256 candidates reproduces the observed block — so every slice is proven in-bounds and the probe loop is guaranteed to hit its <code>break</code>.</li>
+      <li><code>KEY</code> is a fixed 16-byte value only so the result is reproducible; it is never exposed or read back, the same "draw the key, then stop using it" move as L11.</li>
+      <li>Everything reuses existing <code>util/</code> primitives — <code>b64::b64_decode</code> (L1), <code>pad::pkcs7_pad</code> (L9), and <code>aes::ecb_encrypt</code> (L11) — so L12 adds no new module and no new dependency.</li>
+    </ul>
+
+    <details class="support">
+      <summary>supporting code · set2/l004 — unknown_len + recover (block-size discovery &amp; the byte-at-a-time core)</summary>
+      <div class="body">
+        <p>Probe 17 input lengths to walk every residue mod 16 (the minimum of <code>ct.len() - input.len()</code> is <code>unknown_len + 1</code>), then, for byte <code>k</code>, place it as the final byte of block <code>(left + k) / 16</code> and brute-force it:</p>
+        <div class="code-wrap"><pre><code>fn unknown_len() -&gt; usize {
+    (0..=BLOCK)
+        .map(|len| oracle(&amp;vec![FILLER; len]).len() - len)
+        .min()
+        .expect("at least one sample")
+        - 1
+}
+
+fn recover(total: usize, enc: &amp;dyn Fn(&amp;[u8]) -&gt; Vec&lt;u8&gt;) -&gt; Vec&lt;u8&gt; {
+    let mut recovered = Vec::with_capacity(total);
+    for k in 0..total {
+        let mut known15 = if k &lt; BLOCK {
+            vec![FILLER; BLOCK - 1 - k]
+        } else {
+            Vec::with_capacity(BLOCK - 1)
+        };
+        if k &lt; BLOCK {
+            known15.extend_from_slice(&amp;recovered[..k]);
+        } else {
+            known15.extend_from_slice(&amp;recovered[k - (BLOCK - 1)..k]);
+        }
+        let left = BLOCK - 1 - k % BLOCK;
+        let block = (left + k) / BLOCK;
+        let observed = enc(&amp;vec![FILLER; left]);
+        let observed_block = &amp;observed[block * BLOCK..block * BLOCK + BLOCK];
+
+        let mut cand = known15;
+        cand.push(0);
+        for c in 0..=u8::MAX {
+            cand[BLOCK - 1] = c;
+            if enc(&amp;cand)[..BLOCK] == *observed_block {
+                recovered.push(c);
+                break;
+            }
+        }
+    }
+    recovered
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <p>One aligned 16-byte block at a time; the known fifteen bytes are filler for block zero, recovered bytes afterwards:</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">k = 0</span><code>feed 15 × 'A' → block 0 = ('A'×15) + secret[0]; probe 256 candidates, one matches → secret[0]</code></div>
+      <div class="ex-row"><span class="ex-k">k = 1</span><code>feed 14 × 'A' + secret[0] → block 0 is now known-15 + secret[1]</code></div>
+      <div class="ex-row out"><span class="ex-k">k = 16</span><code>block 0 is full; feed the last 15 recovered bytes → secret[16] lands in block 1. Slide forward.</code></div>
+      <div class="ex-row"><span class="ex-k">k = 137</span><code>the 138th byte; assemble all recovered bytes → the full secret</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>the challenge's fixed secret, passed to the box in base64 (decoded in code, never by hand) → 138 bytes</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>Rollin' in my 5.0\nWith my rag-top down so my hair can blow\nThe girls on standby waving just to say hi\nDid you stop? No, I just drove by\n (138 bytes)</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set2/l004.rs</code><span class="sep">·</span> helpers: <code>util/b64</code> · <code>util/pad</code> · <code>util/aes</code> (<code>ecb_encrypt</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>mod solve</code> (6 unit + 1 byte-at-a-time property) · doctest: <code>oracle</code></p>
   </section>
   <!-- Error type appendix -->
   <section id="errors" class="block">
