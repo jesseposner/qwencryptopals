@@ -212,12 +212,13 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>16</b> levels</span>
-    <span class="pill"><b>153</b> unit + <b>21</b> doc tests</span>
+    <span class="pill g"><b>17</b> levels</span>
+    <span class="pill"><b>158</b> unit + <b>23</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">9 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
     <span class="pill">Set 2 · block ciphers</span>
+    <span class="pill">Set 3 · the padding oracle</span>
   </div>
 </header>
 
@@ -242,8 +243,10 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l12" data-toc><span class="n">L12</span>Byte-at-a-time ECB</a></li>
       <li><a href="#l13" data-toc><span class="n">L13</span>ECB cut-and-paste</a></li>
       <li><a href="#l14" data-toc><span class="n">L14</span>Byte-at-a-time, harder</a></li>
-      <li><a href="#l15" data-toc><span class="n">L15</span>Byte-at-a-time, CBC</a></li>
-      <li><a href="#l16" data-toc><span class="n">L16</span>CBC cut-and-paste</a></li>
+      <li><a href="#l15" data-toc><span class="n">L15</span>Validate PKCS#7 padding</a></li>
+      <li><a href="#l16" data-toc><span class="n">L16</span>Exploit mispadding (bit flip)</a></li>
+      <li class="set-head" aria-hidden="true">Set 3 · The padding oracle</li>
+      <li><a href="#l17" data-toc><span class="n">L17</span>The CBC padding oracle</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -253,7 +256,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the sixteen levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the seventeen levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -274,13 +277,13 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <p>Nine small modules in <code>src/util/</code> carry almost all of the work; each <code>solve</code> is then mostly glue. All of them operate on raw bytes — hex and base64 are only transport.</p>
     <div class="blocks-table">
       <div class="row"><div class="mod">util::hex</div><div class="desc"><code>from_hex</code>: hex to <code>Vec&lt;u8&gt;</code>. The test oracles also hand-format bytes back to hex. <span class="lvl">· L1 · L2 · L3 · L4 · L5 · L8</span></div></div>
-      <div class="row"><div class="mod">util::b64</div><div class="desc">hand-rolled RFC 4640 <code>b64_encode</code> and <code>b64_decode</code>. <span class="lvl">· L1 · L6 · L7 · L14</span></div></div>
+      <div class="row"><div class="mod">util::b64</div><div class="desc">hand-rolled RFC 4640 <code>b64_encode</code> and <code>b64_decode</code>. <span class="lvl">· L1 · L6 · L7 · L14 · L17</span></div></div>
       <div class="row"><div class="mod">util::xor</div><div class="desc"><code>xor</code> (equal-length) and <code>xore</code> (repeating-key, cycles from the start). <span class="lvl">· L2 · L5 · L6</span></div></div>
       <div class="row"><div class="mod">util::freq</div><div class="desc"><code>english_score</code> and <code>best_single_byte_key</code> — the single-byte XOR attack. <span class="lvl">· L3 · L4 · L6</span></div></div>
       <div class="row"><div class="mod">util::entropy</div><div class="desc"><code>normalized_shannon_entropy</code>, in <code>[0,1]</code>; the key-length estimator. <span class="lvl">· L6</span></div></div>
-      <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9 L10 L12 L13 L14 L15 L16</span></div></div>
-      <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13 L14 L15</span></div></div>
-      <div class="row"><div class="mod">util::cbc</div><div class="desc"><code>encrypt</code> and <code>decrypt</code> — hand-rolled CBC chaining over the AES core. <span class="lvl">· L10 L11 L15 L16</span></div></div>
+      <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9 L10 L12 L13 L14 L15 L16 L17</span></div></div>
+      <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13 L14</span></div></div>
+      <div class="row"><div class="mod">util::cbc</div><div class="desc"><code>encrypt</code> and <code>decrypt</code> — hand-rolled CBC chaining over the AES core. <span class="lvl">· L10 L11 L16 L17</span></div></div>
       <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
     </div>
   </section>
@@ -1396,164 +1399,236 @@ fn recover(total: usize, prefix_len: usize, enc: &amp;dyn Fn(&amp;[u8]) -&gt; Ve
   <section id="l15" class="challenge">
     <div class="ch-top">
       <span class="ch-num">L15</span>
-      <h2>Byte-at-a-time, the CBC way</h2>
+      <h2>Validate PKCS#7 padding</h2>
       <span class="chip">set2::l007</span>
     </div>
 
     <div class="card problem">
       <span class="card-label">The problem</span>
-      <p class="official">L12 and L14 could read a secret straight off ciphertext, because each encryptable block encodes on its own. CBC breaks that: decrypting block <code>i</code> is <code>D(C_i) XOR C_{i-1}</code>, so the byte you want hides behind a block you can't peek at. What CBC does give you — and ECB never did — is the ability to <em>choose the block your target sits against</em>. Here the service takes any two-block ciphertext you hand it, always terminates it in a fixed <code>secret</code> ciphertext block, decrypts under a fixed public IV, and returns just whether the result ends in valid PKCS#7 padding. Use that one bit to peel the 16-byte secret off, one byte at a time, last byte first.</p>
+      <p class="official">In the previous level we built a PKCS#7 pad/unpad pair. Now nail the rule down: write a validator that takes a buffer and a block size and tells you whether it is <em>correctly</em> padded. At the 16-byte AES block, <code>"ICE ICE BABY" + 04 04 04 04</code> is, while <code>"ICE ICE BABY" + 05 05 05 05</code> and <code>"ICE ICE BABY" + 01 02 03 04</code> are not.</p>
     </div>
 
     <h3>The idea</h3>
-    <p>Send the service <code>B || SECRET_CT</code> where <code>B</code> is 16 bytes you control. The block the service checks for padding is the last one, and it decrypts to <code>D(SECRET_CT) XOR B</code>. Since <code>SECRET_CT</code> is the AES image of a fixed 16-byte secret, that checked block is <code>SECRET XOR B</code> — a fixed unknown value XORed with 16 bytes you choose. Padding validity is a statement about that block's <em>tail</em>, so you can force every byte of <code>SECRET XOR B</code> to a known value except the one you are hunting. To read byte <code>j</code> (walking <code>j</code> from <code>15</code> down to <code>0</code>), force the trailing <code>16 − j</code> bytes to that many <code>16 − j</code> pad bytes, using the already-recovered bytes for the slots ahead of it; then sweep <code>B[j]</code> across all 256 values. Exactly one value leaves the pad value <em>exactly</em> <code>16 − j</code> — and that value is <code>SECRET[j]</code>.</p>
-    <div class="insight"><span class="tag">Core move</span><p>you don't peek at the target block, you control the block it sits against. Decryption turns that chosen block into <code>SECRET XOR B</code>, and a running pad value peeled back across the block hands each byte of <code>SECRET</code> over in 256 probes.</p></div>
+    <p>A buffer is legal PKCS#7 exactly when its final byte <code>n</code> is in <code>1..=block</code> <em>and</em> its last <code>n</code> bytes are all <code>n</code>. Nothing else counts. "ICE&nbsp;ICE&nbsp;BABY" is twelve bytes, so four <code>0x04</code> pad it to a clean sixteen (<code>12 + 4 = 16</code>). A trailing <code>0x05</code>, though, claims five pad bytes on a twelve-byte body — only four trail it, and five would overrun the block. And <code>01 02 03 04</code> fails even before the count: the pad bytes are not all equal. <code>solve</code> is a deliberately thin wrapper that pins the 16-byte block and forwards the verdict to <code>util::pad</code>.</p>
+    <div class="insight"><span class="tag">Core move</span><p>Validation is its own discipline, not a decrypt: read the last byte, check that it is in range, then require that many trailing bytes to all match it. The boundary between "valid" and "malformed" is exactly the one bit a Set&nbsp;3 padding oracle will later leak — so getting this rule airtight is the whole point.</p></div>
 
     <h3>The code</h3>
-    <div class="code-wrap"><pre><code>pub fn padding_oracle(block: [u8; BLOCK]) -&gt; bool {
-    padding_value(block).is_some()
-}
-
-fn padding_value(block: [u8; BLOCK]) -&gt; Option&lt;u8&gt; {
-    let mut ct = [0u8; 2 * BLOCK];
-    ct[..BLOCK].copy_from_slice(&amp;block);
-    ct[BLOCK..].copy_from_slice(&amp;secret_ct());
-    let plain = cbc::decrypt(&amp;ct, &amp;KEY, &amp;IV).expect("two blocks align to 16-byte boundary");
-    pad::pkcs7_unpad(&amp;plain, BLOCK).ok().and_then(|_| {
-        let n = *plain.last()? as usize;
-        (1..=BLOCK).contains(&amp;n).then_some(n as u8)
-    })
-}
-
-pub fn solve() -&gt; Vec&lt;u8&gt; {
-    recover(BLOCK, &amp;padding_value)
+    <div class="code-wrap"><pre><code>pub fn solve(data: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    pad::pkcs7_unpad(data, BLOCK) // BLOCK == 16
 }</code></pre></div>
     <ul class="notes">
-      <li><code>secret_ct()</code> is the service's fixed target block: one 16-byte AES-ECB image of <code>SECRET</code> (built with the same <code>KEY</code> that <code>cbc::decrypt</code> later uses), which is why the checked block is exactly <code>SECRET XOR B</code>.</li>
-      <li>The oracle keeps the <em>value</em>, not just the bit, on purpose. A bare "valid padding" answer would accept a candidate whose pad value is a few bytes longer than intended whenever the still-unknown earlier bytes happen to line up; matching <code>oracle(block) == Some(pad_value)</code> pins the byte exactly, so the sweep is deterministic, not merely likely.</li>
-      <li><code>KEY</code> and <code>IV</code> are fixed constants only for reproducibility and are never exposed or read back; the attacker only ever sees the 16 bytes of <code>SECRET_CT</code> and the <code>Some/None</code> answers.</li>
-      <li>Everything reuses existing <code>util/</code> primitives — <code>aes::ecb_encrypt</code> (to build the target block), <code>cbc::decrypt</code>, <code>pad::pkcs7_unpad</code> — so L15 adds no new module and no new dependency.</li>
+      <li><code>pkcs7_unpad</code> hands back the stripped plaintext on success and <code>Err(CpalError::BadPadding(n))</code> on any miss — no new variant, just the padding error that <code>util::pad</code> already owns.</li>
+      <li>No block cipher anywhere in the path: this level touches only <code>util::pad</code>, which is why it is a pure validator.</li>
     </ul>
 
     <details class="support">
-      <summary>supporting code · set2/l007 — recover (pad-value sweep, last byte first)</summary>
+      <summary>supporting code · util/pad.rs — pkcs7_unpad</summary>
       <div class="body">
-        <p>For byte <code>j</code> the target pad value is <code>16 − j</code>. Every slot ahead of <code>j</code> is forced to that value with an already-recovered byte; then position <code>j</code> is swept and accepted only when the reported pad value is exactly <code>16 − j</code>.</p>
-        <div class="code-wrap"><pre><code>fn recover(total: usize, oracle: &amp;dyn Fn([u8; BLOCK]) -&gt; Option&lt;u8&gt;) -&gt; Vec&lt;u8&gt; {
-    let mut got = [0u8; BLOCK];
-    for j in (0..total).rev() {
-        let pad_value = (BLOCK - j) as u8;
-
-        let mut block = [0u8; BLOCK];
-        for i in (j + 1)..BLOCK {
-            block[i] = got[i] ^ pad_value;
-        }
-
-        for c in 0..=u8::MAX {
-            block[j] = c ^ pad_value;
-            if oracle(block) == Some(pad_value) {
-                got[j] = c;
-                break;
-            }
-        }
+        <p>Read the pad count off the last byte, require it to be in range and that the whole run agree, else abort to <code>BadPadding</code>.</p>
+        <div class="code-wrap"><pre><code>pub fn pkcs7_unpad(data: &amp;[u8], block_size: usize) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    if data.is_empty() || !data.len().is_multiple_of(block_size) {
+        return Err(CpalError::BadPadding(data.len()));
     }
-    got[..total].to_vec()
+    let n = data[data.len() - 1] as usize;
+    if n == 0 || n &gt; block_size || !data[data.len() - n..].iter().all(|&amp;b| b as usize == n) {
+        return Err(CpalError::BadPadding(data.len()));
+    }
+    Ok(data[..data.len() - n].to_vec())
 }</code></pre></div>
       </div>
     </details>
 
     <h3>Worked example</h3>
-    <p>Recover the final two bytes of the secret. Reading <code>j = 15</code> targets a 1-byte pad (<code>0x01</code>): sweep <code>B[15]</code> until the oracle reports pad value exactly <code>1</code> — that is the <code>c</code> where the decrypted last byte is <code>1</code>, and <code>secret[15] = c</code>. Reading <code>j = 14</code> targets a 2-byte pad (<code>0x02 0x02</code>): <code>B[15]</code> is locked so the last decrypted byte is <code>2</code>, then <code>B[14]</code> is swept until the pad value is exactly <code>2</code>. The same walk down to <code>0</code> (a full 16-byte pad) clears the whole block.</p>
+    <p>Three sixteen-byte blocks, three verdicts:</p>
     <div class="ex">
-      <div class="ex-row"><span class="ex-k">j = 15</span><code>pad target 0x01 · sweep B[15] over 0..=255 · the c that forces last byte 0x01 is secret[15]</code></div>
-      <div class="ex-row"><span class="ex-k">j = 14</span><code>pad target 0x02 · lock B[15] so D⊕B ends 0x02 · sweep B[14] until pad value is exactly 2</code></div>
-      <div class="ex-row"><span class="ex-k">j = 0</span><code>pad target 0x10 · a whole block of 0x10 · sweep the very first byte; 16 bytes recovered</code></div>
-      <div class="ex-row out"><span class="ex-k">total</span><code>up to 256 probes per byte × 16 bytes each; in practice every sweep ends as soon as the matching value is hit, so the average is far under the 256 ceiling</code></div>
+      <div class="ex-row"><span class="ex-k">valid</span><code>"ICE ICE BABY" + 04 04 04 04 · last byte 4, in range, last four all 04 → "ICE ICE BABY"</code></div>
+      <div class="ex-row"><span class="ex-k">malformed</span><code>"ICE ICE BABY" + 05 05 05 05 · last byte 5 claims five pads, only four trail it (and five overruns the block) → BadPadding(16)</code></div>
+      <div class="ex-row"><span class="ex-k">malformed</span><code>"ICE ICE BABY" + 01 02 03 04 · last byte 4, but the run is 01 02 03 04, not all 04 → BadPadding(16)</code></div>
     </div>
 
     <h3>Official I/O</h3>
     <div class="io">
-      <div class="io-row"><span class="io-k in">input</span><code>16 attacker-chosen bytes <span class="muted">B</span>; the service appends its fixed 16-byte <span class="muted">SECRET_CT</span> block and decrypts under a fixed public IV</code></div>
-      <div class="io-row"><span class="io-k out">output</span><code>Some(n) / None per probe; <span class="solve">solve()</span> returns the recovered secret <span class="muted">"CBC padding ok,!"</span> (16 bytes, last byte first)</code></div>
+      <div class="io-row"><span class="io-k in">input</span><code>a 16-byte block carrying either a legal pad run or a broken one</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve(b"ICE ICE BABY\x04\x04\x04\x04")</span> → <span class="muted">Ok("ICE ICE BABY")</span>; each malformed block → <span class="muted">Err(BadPadding(16))</span></code></div>
     </div>
-    <p class="files"><strong>Files</strong> <code>src/sets/set2/l007.rs</code><span class="sep">·</span> helpers: <code>util/aes</code> (<code>ecb_encrypt</code>) · <code>util/cbc</code> (<code>decrypt</code>) · <code>util/pad</code> (<code>pkcs7_unpad</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>mod solve</code> (6 unit + 1 any-block-any-key property) · doctests: <code>padding_oracle</code>, <code>solve</code></p>
+    <p class="files"><strong>Files</strong> <code>src/sets/set2/l007.rs</code><span class="sep">·</span> helper: <code>util/pad</code> (<code>pkcs7_unpad</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>mod padding_validation</code> (3 unit + 1 pad→validate property) · doctest: <code>solve</code></p>
   </section>
 
   <!-- L16 -->
   <section id="l16" class="challenge">
     <div class="ch-top">
       <span class="ch-num">L16</span>
-      <h2>Cut-and-paste, the CBC way</h2>
+      <h2>Exploit mispadding (bit flip)</h2>
       <span class="chip">set2::l008</span>
     </div>
 
     <div class="card problem">
       <span class="card-label">The problem</span>
-      <p class="official">L13 forged a <code>role</code> block by <em>reordering</em> ciphertext, and it worked because under ECB an identical block re-encodes identically no matter where it lands. In CBC there is no such reorderable unit: a decrypted block <code>P_i</code> is <code>D(C_i) XOR C_{i-1}</code>, chained to the block in front of it. The freedom you buy instead is to <em>overwrite a decrypted block by editing the ciphertext block that sits before it</code>. The service holds a fixed key (never revealed), always decrypts under a fixed public IV, gives you an encrypt door and a decrypt-then-check door, and hands its back to you to make a decrypted message that contains <code>role=admin</code>.</p>
+      <p class="official">A service encrypts a fixed <code>comment</code> value <em>plus your input</em> in CBC mode under a hidden key, then will decrypt-and-check any ciphertext you hand it for the substring <code>admin=true</code>. Your input is passed through a sanitizer that rejects the literal marker, and it is sandwiched between two fixed, public delimiters. Get the service to decrypt a crafted block into a profile that contains <code>admin=true</code>.</p>
     </div>
 
     <h3>The idea</h3>
-    <p>The service's own data contains a block whose plaintext is the fixed suffix <code>role=user</code> (nine bytes, PKCS#7-padded to <code>role=user</code> + seven <code>0x07</code>). You know its ciphertext <code>C_i</code> because you can ask the encrypt door for it, and you know its plaintext because you know what the service pads to. To rewrite that block into <code>role=admin</code> (10 bytes + six <code>0x06</code>), you do not touch <code>C_i</code> at all — you hand-pick a 16-byte predecessor block <code>C'</code> so that the last block, when decrypted as <code>D(C_i) XOR C'</code>, comes out as exactly <code>role=admin</code> + a clean <code>0x06</code> run: <code>C' = (role=user + pad) XOR (role=admin + pad)</code>. The leading <code>C'</code> then decrypts to garbage you never look at, and the whole two-block thing un-pads to a message that contains <code>role=admin</code>.</p>
-    <div class="insight"><span class="tag">Core move</span><p>ECB cut-and-paste moved a whole block to a new position; CBC cut-and-paste instead re-encrypts <em>into</em> a block by choosing the ciphertext block in front of it, so the target decrypts to whatever plaintext you force.</p></div>
+    <p>The sanitizer stops you <em>typing</em> the marker, but it cannot stop you choosing which bytes a block decrypts to. CBC decodes block <code>i</code> as <code>P_i = D(C_i) XOR C_{i-1}</code>; the block in front of it is not a guard, it is a knob. Flip a bit in <code>C_{i-1}</code> and you flip that very bit in <code>P_i</code>, leaving every other block untouched. The public prefix (two whole blocks) plus your four-byte input plus the public suffix line up so that one entire data block is fully known to you — pick the input to be the four bytes that make that block's target value exactly <code>input ++ ";admin=true;"</code>, then XOR a hand-computed mask into the predecessor block so it decodes to that. The rest of the profile stays pristine and still un-pads.</p>
+    <div class="insight"><span class="tag">Core move</span><p>You never learn the key. You pick which bits in one ciphertext block to flip so the <em>next</em> block decodes to whatever you wrote. The public delimiters do the alignment work that makes a whole block attacker-known — and they line up with the pad rule L15 just nailed down.</p></div>
 
     <h3>The code</h3>
-    <div class="code-wrap"><pre><code>pub fn encryption_oracle(plain: &amp;[u8]) -&gt; Vec&lt;u8&gt; {
-    let padded = pad::pkcs7_pad(plain, BLOCK).expect("PKCS#7 pads to a block multiple");
-    cbc::encrypt(&amp;padded, &amp;KEY, &amp;IV).expect("padded input is block-aligned")
-}
+    <div class="code-wrap"><pre><code>pub fn forge() -&gt; Vec&lt;u8&gt; {
+    let input = "AAAA"; // 4 bytes: block 2 = input ++ first 12 suffix bytes
+    let mut ct = encryption_oracle(input);
 
-pub fn decrypt_and_check(ct: &amp;[u8]) -&gt; bool {
-    let plain = match cbc::decrypt(ct, &amp;KEY, &amp;IV) {
-        Ok(plain) =&gt; plain,
-        Err(_) =&gt; return false,
-    };
-    let unpad = match pad::pkcs7_unpad(&amp;plain, BLOCK) {
-        Ok(unpad) =&gt; unpad,
-        Err(_) =&gt; return false,
-    };
-    unpad.windows(TARGET.len()).any(|w| w == TARGET.as_ref())
-}
+    let plain = build_plain(input);
+    let original: [u8; BLOCK] = plain[32..48].try_into().expect("exactly 16 bytes");
+    let mut target: [u8; BLOCK] = [0u8; BLOCK];
+    target[..input.len()].copy_from_slice(input.as_bytes());
+    target[input.len()..].copy_from_slice(TARGET.as_bytes());
 
-pub fn forged() -&gt; Vec&lt;u8&gt; {
-    let plain_orig = pad::pkcs7_pad(&amp;SUFFIX, BLOCK).expect("nine bytes pad to one block");
-    let ct_i = encryption_oracle(&amp;SUFFIX); // the service's own ciphertext of `role=user`
-    let desired: [u8; BLOCK] = {
-        let mut d = [0x06u8; BLOCK];
-        d[..TARGET.len()].copy_from_slice(&amp;TARGET);
-        d
-    };
-    let forged_prev: [u8; BLOCK] = std::array::from_fn(|i| plain_orig[i] ^ desired[i]);
-    let mut ct = Vec::with_capacity(2 * BLOCK);
-    ct.extend_from_slice(&amp;forged_prev);
-    ct.extend_from_slice(&amp;ct_i);
+    for i in 0..BLOCK {
+        let delta = original[i] ^ target[i];
+        ct[16 + i] ^= delta; // rewrite the block that XORs into block 2's decode
+    }
     ct
 }
 
 pub fn solve() -&gt; bool {
-    decrypt_and_check(&amp;forged())
+    is_admin(&amp;forge())
 }</code></pre></div>
     <ul class="notes">
-      <li>The only way the attack ever learns about <code>C_i</code> is through <code>encryption_oracle</code>; <code>KEY</code> is a fixed constant held back, never read. The forged predecessor is computed purely from public facts: <code>role=user</code>'s PKCS#7 padding and the target <code>role=admin</code>.</li>
-      <li>The lengths matter: <code>role=user</code> is 9 bytes (7 pad) and <code>role=admin</code> is 10 bytes (6 pad), so both fit one block and the XOR <code>C' = plain_orig XOR desired</code> lines up byte for byte. The leading forged block is left garbage on purpose — the check looks at <code>role\admin</code> wherever it lands, and un-pads off the trailing <code>0x06</code> run.</li>
-      <li>Same "draw the key, then stop using it" move as L11–L15: <code>KEY</code> and <code>IV</code> are fixed only so the challenge reproduces; the attacker's whole path is through the two doors.</li>
-      <li>No new module and no new dependency — <code>util/cbc</code> (<code>encrypt</code>, <code>decrypt</code>) plus <code>util/pad</code> carry it; and no new <code>CpalError</code> variant, since the check just returns a <code>bool</code>.</li>
+      <li>Only <code>util/cbc</code> and <code>util/pad</code> are in play: <code>encryption_oracle</code> builds and encrypts the sanitized, delimited plaintext; <code>is_admin</code> decrypts and scans for the target. The two are the challenge's doors; <code>KEY</code> is a fixed constant that is never read back.</li>
+      <li>The mask is <code>delta = original_block2 ^ target_block2</code>, applied to the predecessor block <code>C_1</code> (<code>ct[16..32]</code>), never to the block that carries the target. Bytes 0–3 cancel (the input sits on both sides), so the XOR is confined to the <code>comment2=…</code> → <code>admin…</code> tail.</li>
+      <li>The check is a substring scan over the un-padded plaintext, so a mangled leading block is fine — the target sits in block 2, which is left byte-for-byte clean.</li>
     </ul>
 
+    <details class="support">
+      <summary>supporting code · set2/l008 — the two doors</summary>
+      <div class="body">
+        <p>The encrypt door sanitizes and delimits; the check door decrypts, strips the pad, and scans for the marker.</p>
+        <div class="code-wrap"><pre><code>fn sanitize(input: &amp;str) -&gt; String {
+    input.replace(';', "\\;").replace('=', "\\=")
+}
+
+pub fn encryption_oracle(input: &amp;str) -&gt; Vec&lt;u8&gt; {
+    let padded = pad::pkcs7_pad(&amp;build_plain(input), BLOCK).expect("pads to a block multiple");
+    cbc::encrypt(&amp;padded, &amp;KEY, &amp;IV).expect("padded + 16-byte key/iv")
+}
+
+pub fn is_admin(ct: &amp;[u8]) -&gt; bool {
+    let Ok(raw) = cbc::decrypt(ct, &amp;KEY, &amp;IV) else { return false; };
+    let Ok(plain) = pad::pkcs7_unpad(&amp;raw, BLOCK) else { return false; };
+    plain.windows(TARGET.len()).any(|w| w == TARGET.as_bytes())
+}</code></pre></div>
+      </div>
+    </details>
+
     <h3>Worked example</h3>
-    <p>Compute the forged predecessor byte by byte. <code>plain_orig</code> is <code>role=user</code> padded (<code>…07 07 07 07 07 07 07</code>); <code>desired</code> is <code>role=admin</code> padded (<code>…06 06 06 06 06 06</code>). XORing positions 0–4 cancels to zero (both start with <code>role=</code>), and the tail flips the <code>user</code>→<code>admin</code> bytes plus the pad step.</p>
+    <p>The prefix is a whole two blocks, so for a four-byte input the target block (offset 32..48) is <code>AAAA</code> plus the first twelve suffix bytes. Rewrite it to <code>AAAA</code> plus the marker:</p>
     <div class="ex">
-      <div class="ex-row"><span class="ex-k">bytes</span><code>plain_orig = 72 6f 6c 65 3d 75 73 65 72 07 07 07 07 07 07 07</code></div>
-      <div class="ex-row"><span class="ex-k">desired</span><code>desired    = 72 6f 6c 65 3d 61 64 6d 69 6e 06 06 06 06 06 06</code></div>
-      <div class="ex-row"><span class="ex-k">C' = XOR</span><code>         = 00 00 00 00 00 14 17 08 1b 1c 01 01 01 01 01 01</code></div>
-      <div class="ex-row out"><span class="ex-k">submit</span><code>send C' || C_i → last block decrypts to "role=admin" + 0x06 run → check prints admin</code></div>
+      <div class="ex-row"><span class="ex-k">orig B2</span><code>41 41 41 41 3b 63 6f 6d 6d 65 6e 74 32 3d 25 32 · "AAAA;comment2=%2"</code></div>
+      <div class="ex-row"><span class="ex-k">target</span><code>41 41 41 41 3b 61 64 6d 69 6e 3d 74 72 75 65 3b · "AAAA;admin=true;"</code></div>
+      <div class="ex-row"><span class="ex-k">mask</span><code>00 00 00 00 00 02 0b 00 04 0b 13 00 40 48 40 09 · XORed into C_1 = ct[16..32]</code></div>
+      <div class="ex-row out"><span class="ex-k">submit</span><code>is_admin(forged ct) → true · block 2 now decodes to "AAAA;admin=true;"</code></div>
     </div>
 
     <h3>Official I/O</h3>
     <div class="io">
-      <div class="io-row"><span class="io-k in">input</span><code>the attacker's forged 32-byte ciphertext: the hand-picked 16-byte <span class="muted">C'</span> block in front of the service's own <span class="muted">role=user</span> block <span class="muted">C_i</span></code></div>
-      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve()</span> → <span class="muted">true</span>; the last decrypted block is exactly <span class="muted">role=admin</span> followed by six <code>0x06</code> padding bytes</code></div>
+      <div class="io-row"><span class="io-k in">input</span><code>your four-byte string <span class="muted">"AAAA"</span>, sanitized and wrapped between the public delimiters</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve()</span> → <span class="muted">true</span>; the honest ciphertext fails the check, and the forged block decodes to <span class="muted">"AAAA;admin=true;"</span></code></div>
     </div>
-    <p class="files"><strong>Files</strong> <code>src/sets/set2/l008.rs</code><span class="sep">·</span> helpers: <code>util/cbc</code> (<code>encrypt</code>, <code>decrypt</code>) · <code>util/pad</code> (<code>pkcs7_pad</code>, <code>pkcs7_unpad</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>mod forge</code> (4 unit + 1 deterministic property) · doctests: <code>decrypt_and_check</code>, <code>solve</code></p>
+    <p class="files"><strong>Files</strong> <code>src/sets/set2/l008.rs</code><span class="sep">·</span> helpers: <code>util/cbc</code> (<code>encrypt</code>, <code>decrypt</code>) · <code>util/pad</code> (<code>pkcs7_pad</code>, <code>pkcs7_unpad</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>mod bitflip</code> (6 unit, incl. the byte-exact block assertion) · doctests: <code>is_admin</code>, <code>solve</code></p>
+  </section>
+
+  <!-- L17 -->
+  <section id="l17" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L17</span>
+      <h2>The CBC padding oracle</h2>
+      <span class="chip">set3::l001</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem</span>
+      <p class="official">The service you attack turns encrypted session cookies into plaintext behind the scenes, and <em>distinguishes</em> "padding was valid" from "padding was not" in its response. It happily decrypts any ciphertext you submit and tells you just that one bit. Armed with nothing but the oracle and each cookie's public IV, read the plaintext off — without the key.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>You can break CBC whenever a padding check leaks. CBC decodes block <code>i</code> as <code>P_i = D(C_i) XOR C_{i-1}</code>. You don't control <code>C_i</code> — you control the block slid <em>in front of</em> it. Submit the tampered pair <code>[B_i, C_i]</code>; the oracle runs padding on the first block, which decodes to <code>D(C_i) XOR B_i</code>. Since <code>D(C_i)</code> is fixed and unknown, that checked value is a constant XORed with sixteen bytes you choose. Force every byte <em>after</em> position <code>j</em> of <code>B_i</code> to make the tail read as a known <code>p = 16 − j</code>-byte pad, then sweep <code>B_i[j]</code> over all 256 values until the oracle goes green — that one value is <code>D(C_i)[j]</code>. Walk <code>j</code> back from 15 to 0 and you hold the whole raw block <code>D(C_i)</code>; the real plaintext block is just <code>D(C_i) XOR C_{i-1}</code> (the IV for the first).</p>
+    <div class="insight"><span class="tag">Core move</span><p>The oracle tells you about padding, not the key — but that one distinguishing bit, driven across sixteen bytes × up to 256 probes, peels <code>D(C_i)</code> off block by block. This is the most-deployed-in-the-wild attack in the set, and it runs on the very pad boundary L15 nailed down.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>pub fn solve(
+    ct: &amp;[u8],
+    iv: [u8; BLOCK],
+    oracle: &amp;dyn Fn(&amp;[u8]) -&gt; bool,
+) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    if ct.is_empty() || !ct.len().is_multiple_of(BLOCK) {
+        return Err(CpalError::CiphertextNotBlockAligned(ct.len()));
+    }
+
+    let blocks: Vec&lt;[u8; BLOCK]&gt; = ct.chunks_exact(BLOCK)
+        .map(|b| b.try_into().expect("chunk is exactly 16 bytes"))
+        .collect();
+
+    let mut out = Vec::with_capacity(ct.len());
+    for (i, block) in blocks.iter().enumerate() {
+        let raw = recover_raw(block, oracle);            // = D(C_i)
+        let prev: &amp;[u8] = if i == 0 { &amp;iv } else { &amp;blocks[i - 1] };
+        for k in 0..BLOCK {
+            out.push(raw[k] ^ prev[k]);                  // P_i = D(C_i) XOR C_{i-1}
+        }
+    }
+
+    pad::pkcs7_unpad(&amp;out, BLOCK)
+}</code></pre></div>
+    <ul class="notes">
+      <li>The attacker's whole interface is <code>oracle</code> (<code>padding_oracle</code>) and the public <code>iv</code> — <code>KEY</code> is a fixed, hidden constant the solver never reads. <code>solve</code>'s signature is deliberately <code>ct</code> + <code>iv</code> + <code>oracle</code>, so the attack is provably key-free.</li>
+      <li><code>make_cookie(seed)</code> deterministically picks one of the ten official C17 candidate cookies (opaque base64 vectors), pads, and CBC-encrypts it; a fixed <code>seed</code> makes the pick reproducible for the tests and doctests. <code>build_cookie</code> is the same path that also returns the chosen plaintext, purely so the tests can verify the attack against it without the solver ever touching it.</li>
+      <li>The recovered per-block value is the raw <code>D(C_i)</code>; only the final XOR against the predecessor (or IV) yields the plaintext, and stripping the trailing pad block leaves the body. A "shorter accidental pad" (a stray one-byte pad) is accepted on the strength that the forced <code>16 − j</code>-long run is, in practice, the value being hunted.</li>
+      <li>Only <code>util/cbc</code>, <code>util/pad</code> and <code>util/b64</code> are in play; <code>rand</code> supplies the seeded coin flip for the candidate pick. No new <code>CpalError</code> variant is needed — the two failure modes <code>solve</code> reports are already covered.</li>
+    </ul>
+
+    <details class="support">
+      <summary>supporting code · set3/l001 — recover one raw block</summary>
+      <div class="body">
+        <p>For byte <code>j</code> the target pad length is <code>16 − j</code>. Every byte after <code>j</code> is forced to that value with an already-recovered byte; then <code>j</code> is swept and accepted on the first green.</p>
+        <div class="code-wrap"><pre><code>fn recover_raw(target: &amp;[u8], oracle: &amp;dyn Fn(&amp;[u8]) -&gt; bool) -&gt; [u8; BLOCK] {
+    let mut raw = [0u8; BLOCK];
+    for j in (0..BLOCK).rev() {
+        let pad_value = (BLOCK - j) as u8;
+
+        let mut b = [0u8; BLOCK];
+        for i in (j + 1)..BLOCK {
+            b[i] = raw[i] ^ pad_value; // force every later byte to pad_value
+        }
+        for c in 0..=u8::MAX {
+            b[j] = c ^ pad_value;
+            let mut probe = [0u8; 2 * BLOCK];
+            probe[..BLOCK].copy_from_slice(&amp;b);
+            probe[BLOCK..].copy_from_slice(target);
+            if oracle(&amp;probe) {
+                raw[j] = c; // checked block j decrypts to pad_value only when raw[j] == c
+                break;
+            }
+        }
+    }
+    raw
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <p>Recover the last byte of block 0 (<code>j = 15</code>). Every byte after it is vacuous, so sweep <code>B_0[15]</code> over all 256 values, submitting <code>[B_0, C_0]</code>; the oracle goes green exactly when the forced last byte reads as a one-byte pad. That green value is <code>D(C_0)[15]</code>. Walk <code>j</code> back to 0 (a full sixteen-byte pad) and the whole raw block is in hand; then <code>P_0 = D(C_0) XOR IV</code>.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">j = 15</span><code>pad target 01 · sweep B_0[15] over 0..=255 · the c that makes the last byte 01 is D(C_0)[15]</code></div>
+      <div class="ex-row"><span class="ex-k">j = 14</span><code>pad target 02 · lock byte 15 to read 02 (via a known D(C_0)[15]) · sweep B_0[14] until green</code></div>
+      <div class="ex-row"><span class="ex-k">j = 0</span><code>pad target 10 · a whole block of 0x10 · sweep the very first byte; all 16 raw bytes recovered</code></div>
+      <div class="ex-row out"><span class="ex-k">total</span><code>each of 16 bytes needs at most 256 probes → ≤ 4096 oracle calls per block; strip the final padding block to get the body</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>a CBC ciphertext <span class="muted">ct</span> + its public <span class="muted">IV</span> + the padding oracle — no key</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve(ct, iv, &amp;oracle)</span> → <span class="muted">Ok(plaintext)</span>: the minted cookie's body with its PKCS#7 stripped; a 15-byte rag → <span class="muted">Err(CiphertextNotBlockAligned(15))</span></code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l001.rs</code><span class="sep">·</span> helpers: <code>util/cbc</code> (<code>encrypt</code>, <code>decrypt</code>) · <code>util/pad</code> (<code>pkcs7_pad</code>, <code>pkcs7_unpad</code>) · <code>util/b64</code> (<code>b64_decode</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>mod padding_oracle_attack</code> (6 unit + 1 mint-any-cookie property) · doctests: <code>make_cookie</code>, <code>padding_oracle</code>, <code>solve</code></p>
   </section>
   <!-- Error type appendix -->
   <section id="errors" class="block">
@@ -1569,19 +1644,19 @@ pub fn solve() -&gt; bool {
       <div class="row"><div class="v">EmptyKey</div><div class="m">The repeating-key operation has no key bytes. · <strong>util::xor — L5</strong></div></div>
       <div class="row"><div class="v">CiphertextTooShort(n)</div><div class="m">The base64-decoded ciphertext is too short to analyze. · <strong>L6</strong></div></div>
       <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7 L10 L11 L13</strong></div></div>
-      <div class="row"><div class="v">CiphertextNotBlockAligned(n)</div><div class="m">An AES ciphertext whose length is not a multiple of 16. · <strong>L7 L10 L13</strong></div></div>
+      <div class="row"><div class="v">CiphertextNotBlockAligned(n)</div><div class="m">An AES ciphertext whose length is not a multiple of 16. · <strong>L7 L10 L13 L17</strong></div></div>
       <div class="row"><div class="v">PlaintextNotBlockAligned(n)</div><div class="m">A plaintext whose length is not a multiple of 16, so it can't be fed to a block-cipher mode. · <strong>L11</strong></div></div>
       <div class="row"><div class="v">InvalidIvLength(n)</div><div class="m">An initialization vector that is not the 16 bytes a block-cipher mode requires. · <strong>L10 L11</strong></div></div>
       <div class="row"><div class="v">NoRepeatedBlock</div><div class="m">No ciphertext line revealed the repeated-block signature of ECB. · <strong>L8</strong></div></div>
       <div class="row"><div class="v">InvalidBlockSize(n)</div><div class="m">A PKCS#7 block size outside <code>1..=255</code> was requested. · <strong>L9</strong></div></div>
-      <div class="row"><div class="v">BadPadding(n)</div><div class="m">A buffer's PKCS#7 padding is malformed for its block size. · <strong>util::pad (pkcs7_unpad)</strong></div></div>
+      <div class="row"><div class="v">BadPadding(n)</div><div class="m">A buffer's PKCS#7 padding is malformed for its block size. · <strong>util::pad (pkcs7_unpad) · L15 L16 L17</strong></div></div>
       <div class="row"><div class="v">AuthFailed</div><div class="m">A cookie decrypted and parsed, but its <code>role</code> is not <code>admin</code> — the honest outcome for every real user. · <strong>L13</strong></div></div>
     </div>
   </section>
 
   <footer>
     <p class="kicker">Source</p>
-    <p>One Rust crate. The library is <code>src/lib.rs</code> — just <code>pub mod sets</code> and <code>pub mod util</code>. Each level is a small module under <code>src/sets/set1/</code> or <code>src/sets/set2/</code> exposing a <code>solve</code> function and a <code>#[cfg(test)]</code> module with its own tests (unit and proptest property oracles). Shared primitives live in <code>src/util/</code>. The official challenge payloads ship under <code>data/challenge_04.txt</code>, <code>data/challenge_06.txt</code>, <code>data/challenge_07.txt</code>, <code>data/challenge_08.txt</code> and <code>data/challenge_10.txt</code>. Re-run everything — format, tests and clippy — with <code>just gate</code>.</p>
+    <p>One Rust crate. The library is <code>src/lib.rs</code> — just <code>pub mod sets</code> and <code>pub mod util</code>. Each level is a small module under <code>src/sets/set1/</code>, <code>src/sets/set2/</code> or <code>src/sets/set3/</code> exposing a <code>solve</code> function and a <code>#[cfg(test)]</code> module with its own tests (unit and proptest property oracles). Shared primitives live in <code>src/util/</code>. The official challenge payloads ship under <code>data/challenge_04.txt</code>, <code>data/challenge_06.txt</code>, <code>data/challenge_07.txt</code>, <code>data/challenge_08.txt</code> and <code>data/challenge_10.txt</code>. Re-run everything — format, tests and clippy — with <code>just gate</code>.</p>
   </footer>
 
   </main>
