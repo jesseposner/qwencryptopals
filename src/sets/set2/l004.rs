@@ -39,8 +39,9 @@ const KEY: [u8; 16] = [7, 3, 9, 5, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 5
 /// The filler byte the attack sends to align block boundaries.
 const FILLER: u8 = b'A';
 
-/// The challenge's secret, kept base64-encoded so its contents are not read here. The oracle
-/// decodes this and appends it before encrypting; the solver must recover it byte by byte.
+/// The challenge's target, held in the base64 form the official C12 provides. The oracle
+/// decodes and appends it before encrypting; the solver must recover it byte by byte, so keeping
+/// it encoded means the source pins no plaintext constant the tests would merely compare against.
 const TARGET: &str = "\
 Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkg
 aGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBq
