@@ -71,4 +71,8 @@ pub enum CpalError {
     /// A buffer's PKCS#7 padding is malformed for its block size.
     #[error("malformed PKCS#7 padding in {0} bytes")]
     BadPadding(usize),
+
+    /// A decrypted profile's `role` field is not `admin`.
+    #[error("profile role is not admin")]
+    AuthFailed,
 }

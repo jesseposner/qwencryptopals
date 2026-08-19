@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Annotated walkthrough of all twelve Cryptopals Set 1–2 challenges, wired to the actual Rust code in the qwencryptopals crate.">
+<meta name="description" content="Annotated walkthrough of all thirteen Cryptopals Set 1–2 challenges, wired to the actual Rust code in the qwencryptopals crate.">
 <meta name="color-scheme" content="dark">
 <title>Cryptopals Sets 1–2 · Annotated Walkthrough</title>
 <style>
@@ -199,12 +199,12 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–2</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 118 unit + 11 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 133 unit + 16 doc tests</div>
 </div>
 
 <header class="hero">
   <p class="kicker">Cryptopals · Sets 1–2 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–2, Levels L1–L12 — annotated walkthrough</h1>
+  <h1>Sets 1–2, Levels L1–L13 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -212,8 +212,8 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>12</b> levels</span>
-    <span class="pill"><b>118</b> unit + <b>11</b> doc tests</span>
+    <span class="pill g"><b>13</b> levels</span>
+    <span class="pill"><b>133</b> unit + <b>16</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">9 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
@@ -240,6 +240,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l10" data-toc><span class="n">L10</span>Implement CBC mode</a></li>
       <li><a href="#l11" data-toc><span class="n">L11</span>ECB/CBC detection oracle</a></li>
       <li><a href="#l12" data-toc><span class="n">L12</span>Byte-at-a-time ECB</a></li>
+      <li><a href="#l13" data-toc><span class="n">L13</span>ECB cut-and-paste</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -249,7 +250,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the twelve levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the thirteen levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -267,14 +268,16 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Building blocks -->
   <section id="blocks" class="block">
     <h2>The building blocks</h2>
-    <p>Seven small modules in <code>src/util/</code> carry almost all of the work; each <code>solve</code> is then mostly glue. All of them operate on raw bytes — hex and base64 are only transport.</p>
+    <p>Nine small modules in <code>src/util/</code> carry almost all of the work; each <code>solve</code> is then mostly glue. All of them operate on raw bytes — hex and base64 are only transport.</p>
     <div class="blocks-table">
       <div class="row"><div class="mod">util::hex</div><div class="desc"><code>from_hex</code>: hex to <code>Vec&lt;u8&gt;</code>. The test oracles also hand-format bytes back to hex. <span class="lvl">· L1 · L2 · L3 · L4 · L5 · L8</span></div></div>
       <div class="row"><div class="mod">util::b64</div><div class="desc">hand-rolled RFC 4640 <code>b64_encode</code> and <code>b64_decode</code>. <span class="lvl">· L1 · L6 · L7</span></div></div>
       <div class="row"><div class="mod">util::xor</div><div class="desc"><code>xor</code> (equal-length) and <code>xore</code> (repeating-key, cycles from the start). <span class="lvl">· L2 · L5 · L6</span></div></div>
       <div class="row"><div class="mod">util::freq</div><div class="desc"><code>english_score</code> and <code>best_single_byte_key</code> — the single-byte XOR attack. <span class="lvl">· L3 · L4 · L6</span></div></div>
       <div class="row"><div class="mod">util::entropy</div><div class="desc"><code>normalized_shannon_entropy</code>, in <code>[0,1]</code>; the key-length estimator. <span class="lvl">· L6</span></div></div>
-      <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9</span></div></div>
+      <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9 L10 L13</span></div></div>
+      <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13</span></div></div>
+      <div class="row"><div class="mod">util::cbc</div><div class="desc"><code>encrypt</code> and <code>decrypt</code> — hand-rolled CBC chaining over the AES core. <span class="lvl">· L10 L11</span></div></div>
       <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
     </div>
   </section>
@@ -1195,10 +1198,93 @@ fn recover(total: usize, enc: &amp;dyn Fn(&amp;[u8]) -&gt; Vec&lt;u8&gt;) -&gt; 
     </div>
     <p class="files"><strong>Files</strong> <code>src/sets/set2/l004.rs</code><span class="sep">·</span> helpers: <code>util/b64</code> · <code>util/pad</code> · <code>util/aes</code> (<code>ecb_encrypt</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>mod solve</code> (6 unit + 1 byte-at-a-time property) · doctest: <code>oracle</code></p>
   </section>
+  <section id="l13" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num alt">L13</span>
+      <h2>ECB cut-and-paste</h2>
+      <span class="chip">set2::l005</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Your system turns user input into a string of the form <code>email=<em>email</em>&amp;uid=<em>id</em>&amp;role=<em>user_type</em></code>, PKCS#7-pads it, AES-128-ECB-encrypts it, and gives the result to you. The user can read their own ciphertext, and the system later decrypts it to check permissions. Your task: using the string <code>foo</code>, produce an <code>input_with_id</code> that will result in a cookie that, when decrypted, parses as <code>role=admin</code>.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>This is the ECB lesson of L8 in the wild. ECB is per-block and deterministic, so a cookie is just a bag of interchangeable 16-byte blocks — you can reorder, copy, or substitute them freely and each still decrypts to the same bytes. The trick is to put <code>admin</code> where it must land, right after <code>role=</code>. The way to do that is to exploit the padding: pick an email whose bytes, together with the fixed <code>&amp;uid=10&amp;role=user</code> suffix, line <code>admin</code> up in its <em>own</em> fresh 16-byte block, followed by exactly eleven <code>0x0B</code> bytes. When that block is pasted last, those eleven bytes read as perfectly valid PKCS#7 padding and vanish on un-pad, leaving a clean <code>role=admin</code>. No key is needed — only the encrypting oracle (turn an email into a cookie) and the authenticating oracle (check a cookie for <code>role=admin</code>).</p>
+    <div class="insight"><span class="tag">Core move</span><p>craft an email that carries <code>admin</code> in its own PKCS#7-padded block, encrypt it, and splice the honest cookie into <code>block0 + block2 + block1</code> so that the pasted block lands after <code>role=</code>; its trailing eleven <code>0x0B</code> bytes are stripped as padding on the way back in.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>pub fn solve() -&gt; Vec&lt;u8&gt; {
+    let cookie = encrypt_profile(&amp;crafted_email());
+    debug_assert_eq!(cookie.len(), 4 * BLOCK, "the crafted email must produce four blocks");
+
+    // Keep block 0, drop the `user` tail, paste `&amp;uid=10&amp;role=` after block 0,
+    // then the `admin` block last — its eleven 0x0B bytes read as PKCS#7 padding.
+    let mut forged = Vec::with_capacity(3 * BLOCK);
+    forged.extend_from_slice(&amp;cookie[0..BLOCK]);
+    forged.extend_from_slice(&amp;cookie[2 * BLOCK..3 * BLOCK]);
+    forged.extend_from_slice(&amp;cookie[BLOCK..2 * BLOCK]);
+
+    auth(&amp;forged).expect("the forged cookie authenticates as role=admin");
+    forged
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>solve</code> is a two-step: encrypt the crafted email, then re-order its three content blocks. The only "knowledge" it uses is the block layout it engineered — never <code>KEY</code>.</li>
+      <li>The <em>cut-and-paste</em> property is pinned directly by a test: block 1 of the forged cookie is a byte-for-byte copy of block 1 of the honest cookie for the same email. No block was ever generated without the oracle.</li>
+      <li>The pasted block <code>admin\x0b×11</code> un-pads on its own (eleven valid pad bytes), so the spliced plaintext is exactly <code>email=…&amp;uid=10&amp;role=admin</code> — which is why <code>auth</code> accepts it.</li>
+      <li>The two oracles are the whole interface: <code>encrypt_profile</code> (L11's <code>ecb_encrypt</code>) and <code>auth</code> (L7/L10's <code>ecb_decrypt</code> + un-pad). A new <code>CpalError::AuthFailed</code> variant names the "you are not admin" outcome.</li>
+    </ul>
+
+    <details class="support">
+      <summary>supporting code · set2/l005 — the two oracles + crafted email</summary>
+      <div class="body">
+        <p><code>encrypt_profile</code> is the black box that hands back a cookie; <code>auth</code> is the box to defeat; <code>crafted_email</code> builds the 29-byte email that carries <code>admin</code> in its own padded block:<code>10×'A'</code>, then <code>admin</code>, then eleven <code>0x0B</code>, then <code>3×'A'</code> — so <code>&amp;uid=10&amp;role=user</code> fills out the last two blocks.</p>
+        <div class="code-wrap"><pre><code>pub fn encrypt_profile(email: &amp;str) -&gt; Vec&lt;u8&gt; {
+    let padded =
+        pad::pkcs7_pad(profile_for(email).as_bytes(), BLOCK).expect("block size 16 fits 1..=255");
+    aes::ecb_encrypt(&amp;padded, &amp;KEY).expect("padded, 16-byte key")
+}
+
+pub fn auth(cookie: &amp;[u8]) -&gt; Result&lt;(), CpalError&gt; {
+    match decrypt_profile(cookie)?.get("role").map(String::as_str) {
+        Some("admin") =&gt; Ok(()),
+        _ =&gt; Err(CpalError::AuthFailed),
+    }
+}
+
+fn crafted_email() -&gt; String {
+    let mut email: Vec&lt;u8&gt; = vec![FILLER; 10];
+    email.extend_from_slice(PRIVILEGE.as_bytes());
+    email.extend(std::iter::repeat_n(PAD_BYTE, BLOCK - PRIVILEGE.len()));
+    email.extend_from_slice(&amp;[FILLER; 3]);
+    String::from_utf8(email).expect("ASCII filler and padding stay valid UTF-8")
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <p>The crafted email's profile, PKCS#7-padded, splits into four 16-byte blocks; the splice keeps the first, pastes the third, then the second:</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">email</span><code>10×'A' + "admin" + 0x0B×11 + 3×'A'   (29 bytes)</code></div>
+      <div class="ex-row"><span class="ex-k">block 0</span><code>email=AAAAAAAAAA</code></div>
+      <div class="ex-row"><span class="ex-k">block 1</span><code>admin 0b 0b 0b … 0b         (5 content + 11 pad)</code></div>
+      <div class="ex-row"><span class="ex-k">block 2</span><code>AAA&amp;uid=10&amp;role=</code></div>
+      <div class="ex-row"><span class="ex-k">block 3</span><code>user &amp; 0x0c×12 (the dropped tail)</code></div>
+      <div class="ex-row out"><span class="ex-k">splice</span><code>0 + 2 + 1 → decrypt + un-pad → email=AAAAAAAAAAAAA&amp;uid=10&amp;role=admin</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>the attacker's email (here the 29-byte crafted one) → honest cookie, four blocks</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>the 3-block forged cookie; auth(cookie) == Ok(()) and role == "admin" — no key ever used</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set2/l005.rs</code><span class="sep">·</span> helpers: <code>util/aes</code> (<code>ecb_encrypt</code> + new <code>ecb_decrypt</code>) · <code>util/pad</code> · <code>util/err</code>: <code>AuthFailed</code><span class="sep">·</span> tests: <code>mod cut_and_paste</code> (9 unit + 2 property) · doctests: <code>parse_kv</code>, <code>profile_for</code>, <code>encrypt_profile</code>, <code>solve</code> · <code>util::aes::ecb_decrypt</code> (3 unit + 1 property + doctest)</p>
+  </section>
   <!-- Error type appendix -->
   <section id="errors" class="block">
     <h2>The error type</h2>
-    <p>Every <code>solve</code> either returns its answer or a single shared <code>CpalError</code>; fifteen variants, one per distinct failure mode the levels actually produce, in <code>src/util/err.rs</code>. New variants are added just-in-time as a level needs them.</p>
+    <p>Every <code>solve</code> either returns its answer or a single shared <code>CpalError</code>; sixteen variants, one per distinct failure mode the levels actually produce, in <code>src/util/err.rs</code>. New variants are added just-in-time as a level needs them.</p>
     <div class="err-table">
       <div class="row"><div class="v">InvalidHexChar(c)</div><div class="m">A character that is not a valid hex digit. · <strong>L1 L2 L3 L4 L5 L8</strong></div></div>
       <div class="row"><div class="v">OddLength</div><div class="m">A hex string with an odd number of characters. · <strong>hex decode — L1 L2 L3 L4 L5 L8</strong></div></div>
@@ -1208,13 +1294,14 @@ fn recover(total: usize, enc: &amp;dyn Fn(&amp;[u8]) -&gt; Vec&lt;u8&gt;) -&gt; 
       <div class="row"><div class="v">NoLines</div><div class="m">No candidate lines were supplied to inspect. · <strong>L4 L8</strong></div></div>
       <div class="row"><div class="v">EmptyKey</div><div class="m">The repeating-key operation has no key bytes. · <strong>util::xor — L5</strong></div></div>
       <div class="row"><div class="v">CiphertextTooShort(n)</div><div class="m">The base64-decoded ciphertext is too short to analyze. · <strong>L6</strong></div></div>
-      <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7 L10 L11</strong></div></div>
-      <div class="row"><div class="v">CiphertextNotBlockAligned(n)</div><div class="m">An AES ciphertext whose length is not a multiple of 16. · <strong>L7 L10</strong></div></div>
+      <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7 L10 L11 L13</strong></div></div>
+      <div class="row"><div class="v">CiphertextNotBlockAligned(n)</div><div class="m">An AES ciphertext whose length is not a multiple of 16. · <strong>L7 L10 L13</strong></div></div>
       <div class="row"><div class="v">PlaintextNotBlockAligned(n)</div><div class="m">A plaintext whose length is not a multiple of 16, so it can't be fed to a block-cipher mode. · <strong>L11</strong></div></div>
       <div class="row"><div class="v">InvalidIvLength(n)</div><div class="m">An initialization vector that is not the 16 bytes a block-cipher mode requires. · <strong>L10 L11</strong></div></div>
       <div class="row"><div class="v">NoRepeatedBlock</div><div class="m">No ciphertext line revealed the repeated-block signature of ECB. · <strong>L8</strong></div></div>
       <div class="row"><div class="v">InvalidBlockSize(n)</div><div class="m">A PKCS#7 block size outside <code>1..=255</code> was requested. · <strong>L9</strong></div></div>
       <div class="row"><div class="v">BadPadding(n)</div><div class="m">A buffer's PKCS#7 padding is malformed for its block size. · <strong>util::pad (pkcs7_unpad)</strong></div></div>
+      <div class="row"><div class="v">AuthFailed</div><div class="m">A cookie decrypted and parsed, but its <code>role</code> is not <code>admin</code> — the honest outcome for every real user. · <strong>L13</strong></div></div>
     </div>
   </section>
 

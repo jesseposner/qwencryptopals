@@ -5,11 +5,12 @@
 //! independently by the AES-128 core, which is exactly what makes ECB leak structure — identical
 //! 16-byte inputs give identical 16-byte outputs.
 //!
-//! This is the encrypt half that the Set 2 oracle needs; the matching decrypt primitive already
-//! lives in [`crate::sets::set1::l007`]. Only what a level has asked for is exposed here.
+//! This is the encrypt-and-decrypt half the Set 2 oracles need ([`ecb_encrypt`] and
+//! [`ecb_decrypt`]). Only what a level has asked for is exposed here.
 
 use crate::util::err::CpalError;
 
+use aes::cipher::BlockDecrypt;
 use aes::cipher::BlockEncrypt;
 use aes::cipher::KeyInit;
 use aes::Aes128;
@@ -56,11 +57,51 @@ pub fn ecb_encrypt(plain: &[u8], key: &[u8]) -> Result<Vec<u8>, CpalError> {
     Ok(out)
 }
 
+/// AES-128-ECB-decrypt the block-aligned `ct` under `key`, the inverse of [`ecb_encrypt`].
+///
+/// `key` must be 16 bytes and `ct` a whole number of 16-byte blocks. The result is raw, still
+/// padding-blocks long — a caller unpads with [`crate::util::pad`] as needed.
+///
+/// # Errors
+///
+/// - [`CpalError::InvalidKeyLength`] when `key` is not 16 bytes, or
+/// - [`CpalError::CiphertextNotBlockAligned`] when `ct` is not a multiple of 16.
+///
+/// # Examples
+///
+/// ```
+/// use cryptopals::util::aes;
+/// let key: [u8; 16] = *b"YELLOW SUBMARINE";
+/// let plain = vec![0u8; 16];
+/// let ct = aes::ecb_encrypt(&plain, &key).unwrap();
+/// // ECB decryption inverts ECB encryption block-for-block.
+/// assert_eq!(aes::ecb_decrypt(&ct, &key).unwrap(), plain);
+/// ```
+pub fn ecb_decrypt(ct: &[u8], key: &[u8]) -> Result<Vec<u8>, CpalError> {
+    if key.len() != BLOCK {
+        return Err(CpalError::InvalidKeyLength(key.len()));
+    }
+    if !ct.len().is_multiple_of(BLOCK) {
+        return Err(CpalError::CiphertextNotBlockAligned(ct.len()));
+    }
+
+    let cipher = Aes128::new_from_slice(key).map_err(|_| CpalError::InvalidKeyLength(key.len()))?;
+
+    let mut out = Vec::with_capacity(ct.len());
+    for chunk in ct.chunks_exact(BLOCK) {
+        let mut block = GenericArray::clone_from_slice(chunk);
+        cipher.decrypt_block(&mut block);
+        out.extend_from_slice(block.as_slice());
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod ecb_encrypt_fn {
     use super::*;
 
     use crate::util::hex;
+    use proptest::prelude::*;
 
     const KEY: &str = "2b7e151628aed2a6abf7158809cf4f3c";
 
@@ -105,5 +146,45 @@ mod ecb_encrypt_fn {
             ecb_encrypt(&[0u8; 7], &key),
             Err(CpalError::PlaintextNotBlockAligned(7))
         );
+    }
+
+    /// SP 800-38A F.2.1 inverse of the encrypt block above (ciphertext -> plaintext).
+    #[test]
+    fn ecb_decrypt_inverts_the_sp800_38a_vector() {
+        let key = hex::from_hex(KEY).unwrap();
+        let ct = hex::from_hex("3ad77bb40d7a3660a89ecaf32466ef97").unwrap();
+        assert_eq!(
+            ecb_decrypt(&ct, &key).unwrap(),
+            hex::from_hex("6bc1bee22e409f96e93d7e117393172a").unwrap()
+        );
+    }
+
+    #[test]
+    fn a_ragged_ciphertext_is_rejected_on_decrypt() {
+        let key = hex::from_hex(KEY).unwrap();
+        assert_eq!(
+            ecb_decrypt(&[0u8; 7], &key),
+            Err(CpalError::CiphertextNotBlockAligned(7))
+        );
+    }
+
+    #[test]
+    fn a_key_that_is_not_sixteen_bytes_is_rejected_on_decrypt() {
+        assert_eq!(
+            ecb_decrypt(&[0u8; 16], &[0u8; 8]),
+            Err(CpalError::InvalidKeyLength(8))
+        );
+    }
+
+    proptest! {
+        #[test]
+        fn ecb_decrypt_inverts_ecb_encrypt(
+            key in prop::collection::vec(any::<u8>(), 16),
+            plain in prop::collection::vec(any::<u8>(), 16..=320),
+        ) {
+            let align = plain.len() - plain.len() % BLOCK;
+            let plain = plain.into_iter().take(align).collect::<Vec<_>>();
+            prop_assert_eq!(ecb_decrypt(&ecb_encrypt(&plain, &key).unwrap(), &key).unwrap(), plain);
+        }
     }
 }
