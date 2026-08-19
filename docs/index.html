@@ -199,12 +199,12 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–3</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 170 unit + 25 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 181 unit + 29 doc tests</div>
 </div>
 
 <header class="hero">
   <p class="kicker">Cryptopals · Sets 1–3 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–3, Levels L1–L18 — annotated walkthrough</h1>
+  <h1>Sets 1–3, Levels L1–L19 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -212,8 +212,8 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>18</b> levels</span>
-    <span class="pill"><b>170</b> unit + <b>25</b> doc tests</span>
+    <span class="pill g"><b>19</b> levels</span>
+    <span class="pill"><b>181</b> unit + <b>29</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">10 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
@@ -248,6 +248,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li class="set-head" aria-hidden="true">Set 3 · CTR &amp; the padding oracle</li>
       <li><a href="#l17" data-toc><span class="n">L17</span>The CBC padding oracle</a></li>
       <li><a href="#l18" data-toc><span class="n">L18</span>Implement CTR</a></li>
+      <li><a href="#l19" data-toc><span class="n">L19</span>Break fixed-nonce CTR</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -257,7 +258,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the seventeen levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the nineteen levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -285,7 +286,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9 L10 L12 L13 L14 L15 L16 L17</span></div></div>
       <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13 L14</span></div></div>
       <div class="row"><div class="mod">util::cbc</div><div class="desc"><code>encrypt</code> and <code>decrypt</code> — hand-rolled CBC chaining over the AES core. <span class="lvl">· L10 L11 L16 L17</span></div></div>
-      <div class="row"><div class="mod">util::ctr</div><div class="desc"><code>ctr</code> — the AES-CTR keystream, one involutive function that both encrypts and decrypts; no chaining, no padding. <span class="lvl">· L18</span></div></div>
+      <div class="row"><div class="mod">util::ctr</div><div class="desc"><code>ctr</code> — the AES-CTR keystream, one involutive function that both encrypts and decrypts; no chaining, no padding. Plus <code>shared_keystream</code> and <code>recover</code> — the fixed-nonce keystream-reuse break (XOR a known pair to peel the shared stream back off every message). <span class="lvl">· L18 · L19</span></div></div>
       <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
     </div>
   </section>
@@ -1700,6 +1701,83 @@ pub fn is_admin(ct: &amp;[u8]) -&gt; bool {
       <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve(blob, &amp;KEY, NONCE)</span> → <span class="muted">Ok(52 bytes)</span>: roughly English; a wrong-length key → <span class="muted">Err(InvalidKeyLength(n))</span></code></div>
     </div>
     <p class="files"><strong>Files</strong> <code>src/sets/set3/l002.rs</code><span class="sep">·</span> helpers: <code>util/ctr</code> (<code>ctr</code>, the reusable AES-CTR keystream) · <code>util/b64</code> (<code>b64_decode</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>util::ctr::ctr_fn</code> (6 unit + 1 CTR involutivity property) · <code>set3::l002::solve</code> (4 unit + 1 base64→solve round-trip property) · doctests: <code>ctr</code> on L18, <code>solve</code></p>
+   </section>
+
+  <section id="l19" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L19</span>
+      <h2>Break fixed-nonce CTR mode using substitutions</h2>
+      <span class="chip">set3::l003</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem</span>
+      <p class="official">Take CTR and fix its nonce to <code>0</code>, resetting the counter to zero before every message, and use it to encrypt several short messages. Because every message is XORed against the same leading keystream, the ciphertexts leak each other: recover the plaintext of all forty of them. The plaintext is W. B. Yeats's public-domain poem "Easter, 1916."</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>L18 showed that a CTR keystream depends on the <em>key</em> and the <em>counter</em> alone, never on the data. Fix the nonce and restart the counter for each message, and you have run the very same keystream prefix over every line. Two consequences fall out of a single XOR:</p>
+    <ul>
+      <li><strong>XOR two ciphertexts.</strong> c<sub>a</sub> ⊕ c<sub>b</sub> = (p<sub>a</sub> ⊕ k) ⊕ (p<sub>b</sub> ⊕ k) = p<sub>a</sub> ⊕ p<sub>b</sub>. The shared stream cancels, leaving the two plaintexts' XOR — useful even without knowing any plaintext at all.</li>
+      <li><strong>One known pair pins the stream.</strong> c<sub>x</sub> ⊕ p<sub>x</sub> = k, the shared keystream itself. XOR that back into every other ciphertext and, up to the known line's length, each target's bytes read off as plaintext. A known line at least as long as the longest target (line 38, 38 bytes here) recovers <em>all</em> of them; a shorter one recovers only the shared prefix, and the rest stays ciphertext.</li>
+    </ul>
+    <div class="insight"><span class="tag">Core move</span><p>Recover the keystream by XORing a known ciphertext against its plaintext. Apply that keystream to every other ciphertext and the whole range of lines is undone from a single substitution. The failure mode — a fixed, repeating nonce — is exactly the stream-cipher's only weakness.</p></div>
+
+    <h3>The code</h3>
+    <p>The reusable attack lives in <span class="muted">util::ctr</span>, right next to the L18 keystream:</p>
+    <div class="code-wrap"><pre><code>pub fn shared_keystream(known_ct: &amp;[u8], known_pt: &amp;[u8]) -&gt; Vec&lt;u8&gt; {
+    let n = known_ct.len().min(known_pt.len());
+    (0..n).map(|i| known_ct[i] ^ known_pt[i]).collect()
+}
+
+pub fn recover(ciphertexts: &amp;[Vec&lt;u8&gt;], known_ct: &amp;[u8], known_pt: &amp;[u8]) -&gt; Vec&lt;Vec&lt;u8&gt;&gt; {
+    let ks = shared_keystream(known_ct, known_pt);
+    ciphertexts
+        .iter()
+        .map(|ct| {
+            ct.iter()
+                .enumerate()
+                .map(|(i, &amp;b)| match ks.get(i) {
+                    Some(&amp;k) =&gt; b ^ k,  // keystream still active: decode to plaintext
+                    None =&gt; b,          // past the keystream: leave the ciphertext as-is
+                })
+                .collect()
+        })
+        .collect()
+}</code></pre></div>
+    <p>The level is again thin glue — mint the forty ciphertexts, then hand one known line to the attack:</p>
+    <div class="code-wrap"><pre><code>pub fn ciphers() -&gt; Vec&lt;Vec&lt;u8&gt;&gt; {
+    LINES
+        .iter()
+        .map(|line| ctr::ctr(line.as_bytes(), &amp;KEY, NONCE).expect("KEY is a 16-byte constant"))
+        .collect()
+}
+
+pub fn solve(ciphertexts: &amp;[Vec&lt;u8&gt;], known_ct: &amp;[u8], known_pt: &amp;[u8]) -&gt; Vec&lt;Vec&lt;u8&gt;&gt; {
+    ctr::recover(ciphertexts, known_ct, known_pt)
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>ciphers</code> is the vulnerable setup: each line is CTR-encrypted <em>independently</em> under the same <code>KEY</code> and nonce <code>0</code>, the counter restarting per line. No chaining, so every line reuses the keystream's first bytes.</li>
+      <li><code>shared_keystream</code> is just the byte-XOR of a known ciphertext and its plaintext; <code>recover</code> XORs that stream back into every target and explicitly leaves bytes past the stream as ciphertext (<code>None ⇒ b</code>), so a too-short known line cannot corrupt a longer target's tail.</li>
+      <li>Reusing one known line as long as the longest target makes the recovery total. The headline test asserts all forty recovered bytes equal <code>LINES</code>, so the recovered text is verified byte-for-byte without being re-printed in the source.</li>
+      <li>No new CpalError variant — the only CTR failure this level exercises is an ill-formed key length (caught by <code>ciphers</code>' <code>expect</code>), and the attack itself only XORs. No new data file: the ciphertexts are generated in-memory from the public-domain <code>LINES</code>.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>Line 38 is the longest, at 38 bytes: <code>"He, too, has been changed in his turn,"</code>. Knowing just that one line (ciphertext ⊕ plaintext) recovers a 38-byte keystream, which spans every other line's full length — so a single substitution undoes all forty.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">known pair</span><code>c[38] ⊕ p[38] = keystream[0..38]  <span class="muted">(p[38] = "He, too, has been changed in his turn,")</span></code></div>
+      <div class="ex-row"><span class="ex-k">one target</span><code>p[0] = "I have met them at close of day"  <span class="muted">(28 bytes)</span> = c[0] ⊕ keystream[0..28]</code></div>
+      <div class="ex-row"><span class="ex-k">ciphertexts</span><code>c[a] ⊕ c[b] = p[a] ⊕ p[b]  <span class="muted">— the stream cancels, no plaintext needed</span></code></div>
+      <div class="ex-row out"><span class="ex-k">recover</span><code>for every line, XOR keystream[0..len] back in → all forty lines of "Easter, 1916"</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>40 base64 lines, each CTR(0)-encrypted under one key and nonce 0 — here minted as <span class="solve">ciphers()</span> from public-domain <span class="muted">LINES</span></code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve(&amp;ciphers(), &amp;c[longest], LINES[longest])</span> → <span class="muted">Vec&lt;40 × Vec&lt;u8&gt;&gt;</span>: the recovered plaintext bytes; each equals its original line byte-for-byte</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l003.rs</code><span class="sep">·</span> helpers: <code>util/ctr</code> (<code>ctr</code> from L18 + new <code>shared_keystream</code>, <code>recover</code>) — <em>no new error variant, no new data file</em><span class="sep">·</span> tests: <code>util::ctr::reuse_fn</code> (3 unit + 2 property, the keystream-reuse invariants) · <code>set3::l003::recovery</code> (5 unit, incl. the full 40-line end-to-end recovery + 1 independent-CTR recovery property) · doctests: <code>shared_keystream</code>, <code>recover</code>, <code>ciphers</code>, <code>solve</code></p>
   </section>
 
   <!-- Error type appendix -->
