@@ -11,6 +11,10 @@ random key, prefix/suffix and mode.
 
 Helpers are added **just-in-time** — only when a level actually needs one. No pre-stubbing.
 
+**Purpose.** This repo exists to evaluate **Qwen3.8-27B NVFP4**, which implements each
+challenge level. `qwencryptopals` is the project brand (*Qwen* + *cryptopals*); `cryptopals`
+is the Rust crate, and the two names are distinct on purpose.
+
 ## Building & testing
 
 Run the checks the way they should be trusted:
