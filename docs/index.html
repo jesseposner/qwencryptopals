@@ -199,12 +199,12 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–3</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 187 unit + 30 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 196 unit + 32 doc tests</div>
 </div>
 
 <header class="hero">
   <p class="kicker">Cryptopals · Sets 1–3 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–3, Levels L1–L20 — annotated walkthrough</h1>
+  <h1>Sets 1–3, Levels L1–L21 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -212,10 +212,10 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>20</b> levels</span>
-    <span class="pill"><b>187</b> unit + <b>30</b> doc tests</span>
+    <span class="pill g"><b>21</b> levels</span>
+    <span class="pill"><b>196</b> unit + <b>32</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
-    <span class="pill">10 shared <b>util</b> modules</span>
+    <span class="pill">11 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
     <span class="pill">Set 2 · block ciphers</span>
     <span class="pill">Set 3 · CTR &amp; the padding oracle</span>
@@ -250,6 +250,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l18" data-toc><span class="n">L18</span>Implement CTR</a></li>
       <li><a href="#l19" data-toc><span class="n">L19</span>Break fixed-nonce CTR</a></li>
       <li><a href="#l20" data-toc><span class="n">L20</span>Detect block cipher mode</a></li>
+      <li><a href="#l21" data-toc><span class="n">L21</span>Mersenne Twister RNG</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -259,7 +260,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the twenty levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the twenty-one levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -277,7 +278,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Building blocks -->
   <section id="blocks" class="block">
     <h2>The building blocks</h2>
-    <p>Ten small modules in <code>src/util/</code> carry almost all of the work; each <code>solve</code> is then mostly glue. All of them operate on raw bytes — hex and base64 are only transport.</p>
+    <p>Eleven small modules in <code>src/util/</code> carry almost all of the work; each <code>solve</code> is then mostly glue. All of them operate on raw bytes or 32-bit words: hex and base64 are only transport.</p>
     <div class="blocks-table">
       <div class="row"><div class="mod">util::hex</div><div class="desc"><code>from_hex</code>: hex to <code>Vec&lt;u8&gt;</code>. The test oracles also hand-format bytes back to hex. <span class="lvl">· L1 · L2 · L3 · L4 · L5 · L8</span></div></div>
       <div class="row"><div class="mod">util::b64</div><div class="desc">hand-rolled RFC 4640 <code>b64_encode</code> and <code>b64_decode</code>. <span class="lvl">· L1 · L6 · L7 · L14 · L17 · L18</span></div></div>
@@ -288,6 +289,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13 L14</span></div></div>
       <div class="row"><div class="mod">util::cbc</div><div class="desc"><code>encrypt</code> and <code>decrypt</code> — hand-rolled CBC chaining over the AES core. <span class="lvl">· L10 L11 L16 L17</span></div></div>
       <div class="row"><div class="mod">util::ctr</div><div class="desc"><code>ctr</code> — the AES-CTR keystream, one involutive function that both encrypts and decrypts; no chaining, no padding. Plus <code>shared_keystream</code> and <code>recover</code> — the fixed-nonce keystream-reuse break (XOR a known pair to peel the shared stream back off every message). <span class="lvl">· L18 · L19</span></div></div>
+      <div class="row"><div class="mod">util::mt19937</div><div class="desc"><code>Mt19937::new(seed)</code> + <code>next_u32</code> — the Mersenne Twister, 624 words of 32-bit state, period 2^19937 − 1: the machine behind most languages' <code>rand()</code>. <span class="lvl">· L21</span></div></div>
       <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
     </div>
   </section>
@@ -1849,6 +1851,78 @@ pub fn classify_batch(cts: &amp;[&amp;[u8]]) -&gt; Vec&lt;BlockMode&gt; {
       <div class="io-row"><span class="io-k out">output</span><code><span class="solve">classify_batch</span>(mints) → <span class="muted">Vec&lt;BlockMode&gt;</span> (80 entries): even indices <span class="muted">Ecb</span>, odd <span class="muted">Cbc</span> — 40/40 correct each way</code></div>
     </div>
     <p class="files"><strong>Files</strong> <code>src/sets/set3/l004.rs</code><span class="sep">·</span> helpers: <code>util/aes</code> (<code>ecb_encrypt</code>) · <code>util/cbc</code> (<code>encrypt</code>) · <code>util/entropy</code> (<code>normalized_shannon_entropy</code>) — <em>no new error variant, no new data file</em><span class="sep">·</span> tests: <code>mod solve</code> (5 unit: the ecb/cbc pair, the &lt;2-block edge, the full-80 recovery + 40-count, the 64-byte shape, the ECB&lt;CBC entropy gap · 1 property: <code>classify_batch</code> matches the minted mode across every <code>(seed, batch)</code> pair) · doctest: <code>mint</code></p>
+  </section>
+  <!-- L21 -->
+  <section id="l21" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L21</span>
+      <h2>Mersenne Twister RNG</h2>
+      <span class="chip">set3::l005</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem</span>
+      <p class="official">Most languages' <code>rand()</code> is the Mersenne Twister, and the challenge is to hand-roll the machine instead of calling the library: implement MT19937 from the C reference form, seed it with 5489, and print the first 32 32-bit words. The expected list is pinned on the challenge page, so a correct implementation matches it word for word.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>The whole machine is one 624-word <code>u32</code> array. A single 32-bit seed stretches across it: <code>s[0] = seed</code> and <code>s[i] = 1812433253 · (s[i−1] ⊕ s[i−1] &gt;&gt; 30) + i</code> (mod 2^32). Producing a word is two steps. When the state is exhausted it is <em>twisted</em>: each word becomes <code>s[k+397] ^ (y &gt;&gt; 1) ^ (low bit of y ? 0x9908B0DF : 0)</code>, where <code>y</code> is the top bit of <code>s[k]</code> or the low 31 bits of <code>s[k+1]</code>. The drawn word is then <em>tempered</em> with four XOR-shift passes that spread the low-bit correlation of the raw state word across all 32 bits. 624 words of 32 bits is 19968 bits, just past 19937: that is what makes the period 2^19937 − 1, the Mersenne prime the family is named for. One subtlety the reference values hinge on: the canonical form, the one <code>std::mt19937</code> runs, starts the draw index at 624, so the very first draw twists before it produces a word.</p>
+    <div class="insight"><span class="tag">Core move</span><p>Get the twist right: the <code>k+397</code> lag, the low bit that selects <code>MATRIX_A</code>, and the twist-before-first-draw convention. Every reference is the same machine (the C source, <code>std::mt19937</code>, Python's <code>random</code>), so a correct implementation agrees with all of them on every word, and the KATs pin the stream head, seed 0, and a triple that straddles the twist boundary.</p></div>
+
+    <h3>The code</h3>
+    <p>The machine is two small loops: a seed-stretch that fills the state, and the twist that runs when the 624 words are exhausted. The constants doing the work: <code>N = 624</code>, <code>M = 397</code>, <code>UPPER = 0x8000_0000</code>, <code>LOWER = 0x7FFF_FFFF</code>, <code>MATRIX_A = 0x9908_B0DF</code>, <code>SEED_MUL = 1_812_433_253</code>:</p>
+    <div class="code-wrap"><pre><code>pub fn new(seed: u32) -> Self {
+    let mut state = [0u32; N];
+    state[0] = seed;
+    for i in 1..N {
+        state[i] = SEED_MUL
+            .wrapping_mul(state[i - 1] ^ (state[i - 1] &gt;&gt; 30))
+            .wrapping_add(i as u32);
+    }
+    Self { state, idx: N }   // index 624: the first draw twists
+}</code></pre></div>
+    <div class="code-wrap"><pre><code>pub fn next_u32(&amp;mut self) -> u32 {
+    if self.idx &gt;= N {
+        for k in 0..N {
+            let y = (self.state[k] &amp; UPPER) | (self.state[(k + 1) % N] &amp; LOWER);
+            self.state[k] = self.state[(k + M) % N]
+                ^ (y &gt;&gt; 1)
+                ^ if y &amp; 1 != 0 { MATRIX_A } else { 0 };
+        }
+        self.idx = 0;
+    }
+    let word = self.state[self.idx];
+    self.idx += 1;
+    temper(word)
+}
+
+fn temper(mut word: u32) -> u32 {
+    word ^= word &gt;&gt; 11;
+    word ^= (word &lt;&lt; 7) &amp; 0x9D2C5680;
+    word ^= (word &lt;&lt; 15) &amp; 0xEFC60000;
+    word ^= word &gt;&gt; 18;
+    word
+}</code></pre></div>
+    <ul class="notes">
+      <li>The twist is a single forward in-place loop: each <code>state[k]</code> is written from <code>state[(k + M) % N]</code> plus a mix of the two words ahead, which is safe because the twist always reads ahead of where it writes. The two-loop form in the C reference is the same computation split to avoid the modulo.</li>
+      <li><code>next_u32</code> is the only method besides <code>new</code>: the state and index are private, so the module cannot leak an untempered word. The follow-up challenge (state recovery) will need state access; that surface is added just-in-time.</li>
+      <li>No new <code>CpalError</code> variant, no data file: the RNG is generated in the crate, and <code>solve</code> returns the raw <code>Vec&lt;u32&gt;</code> stream, no <code>Result</code>.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p><code>Mt19937::new(5489)</code>: the first draw twists the freshly stretched state, reads word 0 (<code>0xD091BB5C</code>), tempers it, and hands back <code>3499211612</code>, the first word of the official 32-word list. Word 623 is the last draw of the first twisted pass and words 624–625 the first two of the second, so the boundary triple <code>[4020325887, 4178893912, 610818241]</code> is the one KAT that exercises the twist itself.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">seed 5489, draw 1</span><code>Mt19937::new(5489).next_u32() = 3499211612  <span class="muted">→ 0xD091BB5C, first word of the official list</span></code></div>
+      <div class="ex-row"><span class="ex-k">twist boundary</span><code>words 623–625 = 4020325887, 4178893912, 610818241  <span class="muted">→ straddle the twist between pass 1 and pass 2</span></code></div>
+      <div class="ex-row out"><span class="ex-k">solve</span><code><span class="solve">solve</span>(5489, 2) = [3499211612, 581869302]</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>seed 5489, 32 32-bit draws (the official list on the challenge page)</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve</span>(5489, 32) → <span class="muted">Vec&lt;u32&gt;</span> matching the official list; the KATs pin words 1–10, seed-0 words 1–5, and the twist-boundary triple 623–625</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/util/mt19937.rs</code> (the machine) + <code>src/sets/set3/l005.rs</code> (the surface)<span class="sep">·</span> <em>no new error variant, no data file</em>: the RNG is minted in the crate<span class="sep">·</span> tests: <code>mod tests</code> in <code>util/mt19937.rs</code> (3 KATs pinned against C, C++, and Python oracles: the 5489 stream head, the seed-0 head, the twist-boundary triple; 3 properties: same-seed determinism, different-seeds-diverge-on-the-first-draw, top-byte chi-square over 4096 draws · doctest) · <code>mod solve</code> in <code>set3/l005.rs</code> (the official stream, zero draws, stream-length property · doctest)</p>
   </section>
 
   <!-- Error type appendix -->

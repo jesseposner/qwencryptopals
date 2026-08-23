@@ -11,5 +11,6 @@ pub mod entropy;
 pub mod err;
 pub mod freq;
 pub mod hex;
+pub mod mt19937;
 pub mod pad;
 pub mod xor;
