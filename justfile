@@ -10,7 +10,8 @@ gate:
 test:
     cargo test
 
-# Run property tests with a higher proptest case count (default 500)
+# Run property tests with a higher proptest case count (default 500; proptest's own
+# default is 256, so bare `just test-fuzz` runs more cases than `cargo test`)
 test-fuzz cases="500":
     PROPTEST_CASES={{cases}} cargo test
 
