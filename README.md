@@ -1,4 +1,4 @@
-# cryptopals
+# qwencryptopals
 
 Hand-rolled [Cryptopals](https://cryptopals.com/) solutions in Rust, one level at a time.
 We hand-roll the cryptography: every Set 1 level is built from `std` plus `thiserror`

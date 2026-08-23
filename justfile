@@ -1,4 +1,4 @@
-# cryptopals — run `just -l` to list all recipes.
+# qwencryptopals — run `just -l` to list all recipes.
 
 # Trusted verification gate — fmt, test, then lint; the default recipe (defined first)
 gate:
