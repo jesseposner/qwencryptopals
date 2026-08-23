@@ -75,4 +75,8 @@ pub enum CpalError {
     /// A decrypted profile's `role` field is not `admin`.
     #[error("profile role is not admin")]
     AuthFailed,
+
+    /// No seed in the searched window produced the observed RNG output.
+    #[error("no seed in the window produced the observed output")]
+    NoSeedFound,
 }

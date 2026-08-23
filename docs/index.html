@@ -199,12 +199,12 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–3</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 196 unit + 32 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 199 unit + 33 doc tests</div>
 </div>
 
 <header class="hero">
   <p class="kicker">Cryptopals · Sets 1–3 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–3, Levels L1–L21 — annotated walkthrough</h1>
+  <h1>Sets 1–3, Levels L1–L22 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -212,8 +212,8 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>21</b> levels</span>
-    <span class="pill"><b>196</b> unit + <b>32</b> doc tests</span>
+    <span class="pill g"><b>22</b> levels</span>
+    <span class="pill"><b>199</b> unit + <b>33</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">11 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
@@ -251,6 +251,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l19" data-toc><span class="n">L19</span>Break fixed-nonce CTR</a></li>
       <li><a href="#l20" data-toc><span class="n">L20</span>Detect block cipher mode</a></li>
       <li><a href="#l21" data-toc><span class="n">L21</span>Mersenne Twister RNG</a></li>
+      <li><a href="#l22" data-toc><span class="n">L22</span>Crack an MT19937 seed</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -260,7 +261,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the twenty-one levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the twenty-two levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -289,7 +290,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13 L14</span></div></div>
       <div class="row"><div class="mod">util::cbc</div><div class="desc"><code>encrypt</code> and <code>decrypt</code> — hand-rolled CBC chaining over the AES core. <span class="lvl">· L10 L11 L16 L17</span></div></div>
       <div class="row"><div class="mod">util::ctr</div><div class="desc"><code>ctr</code> — the AES-CTR keystream, one involutive function that both encrypts and decrypts; no chaining, no padding. Plus <code>shared_keystream</code> and <code>recover</code> — the fixed-nonce keystream-reuse break (XOR a known pair to peel the shared stream back off every message). <span class="lvl">· L18 · L19</span></div></div>
-      <div class="row"><div class="mod">util::mt19937</div><div class="desc"><code>Mt19937::new(seed)</code> + <code>next_u32</code> — the Mersenne Twister, 624 words of 32-bit state, period 2^19937 − 1: the machine behind most languages' <code>rand()</code>. <span class="lvl">· L21</span></div></div>
+      <div class="row"><div class="mod">util::mt19937</div><div class="desc"><code>Mt19937::new(seed)</code> + <code>next_u32</code> — the Mersenne Twister, 624 words of 32-bit state, period 2^19937 − 1: the machine behind most languages' <code>rand()</code>. <span class="lvl">· L21 · L22</span></div></div>
       <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
     </div>
   </section>
@@ -1924,11 +1925,57 @@ fn temper(mut word: u32) -> u32 {
     </div>
     <p class="files"><strong>Files</strong> <code>src/util/mt19937.rs</code> (the machine) + <code>src/sets/set3/l005.rs</code> (the surface)<span class="sep">·</span> <em>no new error variant, no data file</em>: the RNG is minted in the crate<span class="sep">·</span> tests: <code>mod tests</code> in <code>util/mt19937.rs</code> (3 KATs pinned against C, C++, and Python oracles: the 5489 stream head, the seed-0 head, the twist-boundary triple; 3 properties: same-seed determinism, different-seeds-diverge-on-the-first-draw, top-byte chi-square over 4096 draws · doctest) · <code>mod solve</code> in <code>set3/l005.rs</code> (the official stream, zero draws, stream-length property · doctest)</p>
   </section>
+  <!-- L22 -->
+  <section id="l22" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L22</span>
+      <h2>Crack an MT19937 seed</h2>
+      <span class="chip">set3::l006</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Make sure your MT19937 accepts an integer seed. Write a routine that performs the following operation: wait a random number of seconds between, I don't know, 40 and 1000; seed the RNG with the current Unix timestamp; wait a random number of seconds again; return the first 32-bit output of the RNG. From that 32-bit output, discover the seed.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>A timestamp-seeded RNG is a clock, not a source of entropy. The seed space is not 2^32; it is a few thousand Unix seconds, because the server's wait is bounded. An attacker who sees one 32-bit word and knows the observation time to within that window has only about 1000 candidates. Each candidate is one seed-stretch of the 624-word state, one twist, one temper, one comparison: a full window is a few thousand word operations, under a millisecond. The brute force is a loop, not a cryptographic attack on the algorithm. And the moment one output word matches, the seed is known, and the entire future stream is just <code>next_u32</code> called again. The machine is the one from <a href="#l21">L21</a>; this level is the observation side: walk the time window backward and find the seed whose first draw is the word you saw.</p>
+    <div class="insight"><span class="tag">Core move</span><p>Search backward from the observation time, not forward from the epoch: <code>for back in 0..=1000 { seed = current.wrapping_sub(back) }</code>. The newest candidate is the most plausible seed, so the first match is the deterministic, testable behavior. When no candidate in the window produces the observed word, the result is a new just-in-time <code>CpalError::NoSeedFound</code> variant.</p></div>
+
+    <h3>The code</h3>
+    <p>One loop over the window; each candidate seeds the machine from L21 and draws exactly one word. The window is a constant: 1000 s covers the challenge's upper bound on the wait.</p>
+    <div class="code-wrap"><pre><code>pub fn solve(current_unix_time: u32, first_output: u32) -&gt; Result&lt;u32, CpalError&gt; {
+    (0..=WINDOW)
+        .map(|back| current_unix_time.wrapping_sub(back))
+        .find(|&amp;seed| Mt19937::new(seed).next_u32() == first_output)
+        .ok_or(CpalError::NoSeedFound)
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>wrapping_sub</code> keeps the loop total when the observation time is under 1000: the low candidates wrap to the far future and simply never match, so the semantics stay "search the last 1000 timestamps".</li>
+      <li>Each trial is one seed-stretch, one twist, one temper, so a full 1000-candidate window costs roughly a thousand word operations, no optimization needed.</li>
+      <li>The <code>NoSeedFound</code> variant in <code>util/err.rs</code> is the just-in-time error addition this level needed; its not-found test uses a window verified collision-free against the C oracle.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>The server seeded at Unix time 1700000000 and the attacker sees its first word, 1001043830, at roughly 1700000040. Walking back 1000 seconds from the observation time, 1700000000 is the only candidate whose first draw is 1001043830. The doctest pins exactly this recovery.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">observation</span><code>first word 1_001_043_830, observed around Unix time 1_700_000_040<span class="muted"> → the seed is at most 1000 s before the observation</span></code></div>
+      <div class="ex-row out"><span class="ex-k">recovery</span><code><span class="solve">solve</span>(1_700_000_040, 1_001_043_830) = 1_700_000_000<span class="muted"> → seed recovered; the future stream is now predictable</span></code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>observed first output 1_001_043_830, observed at Unix time 1_700_000_040 (the challenge's waits, simulated)</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve</span>(1_700_000_040, 1_001_043_830) → 1_700_000_000; the tests also pin a seed at the 1000 s edge and a collision-free <code>NoSeedFound</code> window</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l006.rs</code> (the search) reusing <code>util/mt19937.rs</code><span class="sep">·</span> <em>new error variant</em> <code>NoSeedFound</code> in <code>util/err.rs</code><span class="sep">·</span> tests: <code>mod solve</code> in <code>set3/l006.rs</code> (a seed inside the window, a seed at the 1000 s edge, a not-found window · doctest)</p>
+  </section>
+
 
   <!-- Error type appendix -->
   <section id="errors" class="block">
     <h2>The error type</h2>
-    <p>Every <code>solve</code> either returns its answer or a single shared <code>CpalError</code>; sixteen variants, one per distinct failure mode the levels actually produce, in <code>src/util/err.rs</code>. New variants are added just-in-time as a level needs them.</p>
+    <p>Every <code>solve</code> either returns its answer or a single shared <code>CpalError</code>; seventeen variants, one per distinct failure mode the levels actually produce, in <code>src/util/err.rs</code>. New variants are added just-in-time as a level needs them.</p>
     <div class="err-table">
       <div class="row"><div class="v">InvalidHexChar(c)</div><div class="m">A character that is not a valid hex digit. · <strong>L1 L2 L3 L4 L5 L8</strong></div></div>
       <div class="row"><div class="v">OddLength</div><div class="m">A hex string with an odd number of characters. · <strong>hex decode — L1 L2 L3 L4 L5 L8</strong></div></div>
@@ -1946,6 +1993,7 @@ fn temper(mut word: u32) -> u32 {
       <div class="row"><div class="v">InvalidBlockSize(n)</div><div class="m">A PKCS#7 block size outside <code>1..=255</code> was requested. · <strong>L9</strong></div></div>
       <div class="row"><div class="v">BadPadding(n)</div><div class="m">A buffer's PKCS#7 padding is malformed for its block size. · <strong>util::pad (pkcs7_unpad) · L15 L16 L17</strong></div></div>
       <div class="row"><div class="v">AuthFailed</div><div class="m">A cookie decrypted and parsed, but its <code>role</code> is not <code>admin</code> — the honest outcome for every real user. · <strong>L13</strong></div></div>
+      <div class="row"><div class="v">NoSeedFound</div><div class="m">No seed in the searched 1000 s window produced the observed RNG output. · <strong>L22</strong></div></div>
     </div>
   </section>
 

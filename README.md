@@ -28,7 +28,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 Or, if you have [just](https://github.com/casey/just), `just gate` runs the three
 in sequence (it's the default recipe). Others: `just test`, `just test-fuzz`,
 `just lvl set1 l003`, `just lint`, `just fmt`, `just doc` — or `just -l` for the
-full list. The suite is **196 unit + 32 doc tests** and growing one level at a time.
+full list. The suite is **199 unit + 33 doc tests** and growing one level at a time.
 
 `proptest` is a **dev-only** dependency used for property tests; it never ships in the crate.
 
@@ -79,9 +79,10 @@ src/
       l003.rs            Set 3, Level 3 (break fixed-nonce CTR via keystream reuse)
       l004.rs            Set 3, Level 4 (block cipher mode detection)
       l005.rs            Set 3, Level 5 (implement the MT19937 Mersenne Twister RNG)
+      l006.rs            Set 3, Level 6 (crack an MT19937 seed)
 data/
   challenge_04.txt, challenge_06.txt, challenge_07.txt, challenge_08.txt,
   challenge_10.txt   official Cryptopals payloads read by their test modules
 docs/
-  index.html         self-contained HTML walkthrough of Sets 1–3, Levels L1–L21
+  index.html         self-contained HTML walkthrough of Sets 1–3, Levels L1–L22
 ```
