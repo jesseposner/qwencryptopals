@@ -199,12 +199,12 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–4</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 221 unit + 38 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 228 unit + 41 doc tests</div>
 </div>
 
 <header class="hero">
   <p class="kicker">Cryptopals · Sets 1–4 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–4, Levels L1–L25 — annotated walkthrough</h1>
+  <h1>Sets 1–4, Levels L1–L26 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -212,8 +212,8 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>25</b> levels</span>
-    <span class="pill"><b>221</b> unit + <b>38</b> doc tests</span>
+    <span class="pill g"><b>26</b> levels</span>
+    <span class="pill"><b>228</b> unit + <b>41</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">11 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
@@ -257,6 +257,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l24" data-toc><span class="n">L24</span>MT19937 stream cipher</a></li>
       <li class="set-head" aria-hidden="true">Set 4 · Stream ciphers</li>
       <li><a href="#l25" data-toc><span class="n">L25</span>Random-access CTR</a></li>
+      <li><a href="#l26" data-toc><span class="n">L26</span>CTR bit-flipping</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -266,7 +267,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the twenty-five levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the twenty-six levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -294,7 +295,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9 L10 L12 L13 L14 L15 L16 L17</span></div></div>
       <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13 L14</span></div></div>
       <div class="row"><div class="mod">util::cbc</div><div class="desc"><code>encrypt</code> and <code>decrypt</code> — hand-rolled CBC chaining over the AES core. <span class="lvl">· L10 L11 L16 L17</span></div></div>
-      <div class="row"><div class="mod">util::ctr</div><div class="desc"><code>ctr</code> (AES-128-CTR, involutive) + <code>shared_keystream</code> / <code>recover</code> for fixed-nonce reuse. <span class="lvl">· L18 · L19 · L25</span></div></div>
+      <div class="row"><div class="mod">util::ctr</div><div class="desc"><code>ctr</code> (AES-128-CTR, involutive) + <code>shared_keystream</code> / <code>recover</code> for fixed-nonce reuse. <span class="lvl">· L18 · L19 · L25 · L26</span></div></div>
       <div class="row"><div class="mod">util::mt19937</div><div class="desc"><code>Mt19937::new(seed)</code> + <code>next_u32</code> — the Mersenne Twister, 624 words of 32-bit state, period 2^19937 − 1: the machine behind most languages' <code>rand()</code>. Plus <code>untemper</code> (the temper's exact inverse, the order-8 cascade included) and <code>from_outputs</code> (splice one full pass of outputs back into a live generator). <span class="lvl">· L21 · L22 · L23 · L24</span></div></div>
       <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
     </div>
@@ -2164,6 +2165,66 @@ pub fn from_outputs(outputs: &amp;[u32; 624]) -&gt; Self {
       <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>(ct, edit) → the 138-byte secret, starting <code>526f6c6c 696e2720</code>; the tests pin the raw-keystream leak, the splice at offset 7 with <code>qwerty</code>, the end-of-slice and key-length rejections, the no-op end edit, and two properties: any 1–256-byte secret round-trips, and <code>edit</code> is exactly splice-then-CTR</code></div>
     </div>
     <p class="files"><strong>Files</strong> <code>src/sets/set4/l001.rs</code><span class="sep">·</span> helpers: <code>util/ctr</code> (<code>ctr</code>) · <code>util/xor</code> (<code>xor</code>) · <code>set2/l004</code> (the secret) — <em>no new error variant, no data file</em><span class="sep">·</span> tests: <code>mod solve</code> in <code>set4/l001.rs</code> (7 unit: the L12-secret round-trip, the raw-keystream leak, the splice boundary, the end rejection, the key-length rejection, the empty document, the no-op end edit · 2 properties: any secret round-trips, edit = splice-then-CTR) · doctests: <code>edit</code>, <code>solve</code></p>
+  </section>
+  <!-- L26 -->
+  <section id="l26" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L26</span>
+      <h2>CTR bit-flipping</h2>
+      <span class="chip">set4::l002</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">There are people in the world that believe that CTR resists bit-flipping attacks of the kind to which CBC mode is susceptible. Re-implement <a href="#l16">the CBC bit-flip exercise</a> to use CTR mode instead of CBC mode. Inject an "admin=true" token.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>CBC's bit-flip (<a href="#l16">L16</a>) corrupts one ciphertext byte and lets the chained decrypt scramble the next block. CTR has no chain to corrupt: each plaintext byte is just its ciphertext byte XORed with one keystream byte, <code>P[i] = C[i] ^ K[i]</code>. So the move is not to flip a bit but to <em>write</em> one. With the key and counter fixed, the keystream is a fixed function of the two, and one known <code>(P, C)</code> pair recovers it byte-for-byte: <code>K[i] = P[i] ^ C[i]</code>. The attacker already knows the whole plaintext (the public delimiters plus their own input) and already holds the ciphertext. Over the one fully-known 16-byte block they compute <code>K[i]</code> and rewrite <code>C'[i] = K[i] ^ P'[i]</code> so the block decodes to <code>input ++ ";admin=true;"</code>. Every byte outside that block stays bit-identical, so the rest of the profile still decodes cleanly and the check door finds the injected token.</p>
+    <div class="insight"><span class="tag">Core move</span><p>CTR trades the CBC flip for a <em>random access write</em>: one known pair leaks the keystream over a 16-byte window, and that window is the attacker's free variable. Rewrite it to decode to the token, touch nothing else, and the front door's escaping never gets a chance.</p></div>
+
+    <h3>The code</h3>
+    <p>The level module is the CTR twin of <a href="#l16">L16</a>: a fixed, hidden AES-128 key, a fixed public counter, two doors that sandwich input between public delimiters, and the rewrite. The keystream comes from <a href="#l18"><code>util/ctr</code></a>.</p>
+    <div class="code-wrap"><pre><code>pub fn forge() -&gt; Vec&lt;u8&gt; {
+    let input = "AAAA"; // 4 bytes: the range = input ++ first 12 suffix bytes
+    let mut ct = encryption_oracle(input);
+    let plain = build_plain(input);
+
+    let mut target: [u8; BLOCK] = [0u8; BLOCK];
+    target[..input.len()].copy_from_slice(input.as_bytes());
+    target[input.len()..].copy_from_slice(TARGET.as_bytes());
+
+    for (j, _) in target.iter().enumerate() {
+        let i = RANGE + j;
+        let keystream = plain[i] ^ ct[i]; // K[i], from the one known pair
+        ct[i] = keystream ^ target[j]; // C'[i] = K[i] ^ P'[i]
+    }
+    ct
+}</code></pre></div>
+    <div class="code-wrap"><pre><code>pub fn solve() -&gt; bool {
+    is_admin(&amp;forge())
+}</code></pre></div>
+    <ul class="notes">
+      <li>The service is the CTR twin of <a href="#l16">L16</a>: it holds a fixed, hidden AES-128 <code>KEY</code> and a fixed public counter <code>NONCE</code> (L18's layout), and the encrypt door wraps input between two public delimiters, escaping any <code>;</code> or <code>=</code> so no input can form the literal token. The check door decrypts and looks for <code>";admin=true;"</code>.</li>
+      <li>No new <code>CpalError</code> variant: the check door is a <code>bool</code>, and a CTR failure (which CTR, being a stream, never produces) simply reports <code>false</code>. No <code>Result</code>, no padding.</li>
+      <li><code>solve</code> is the two lines that run the whole attack: forge, then ask the check door. The doctest pins <code>solve() == true</code>.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>With input "AAAA", the fully-known range is bytes 32..48: the four input bytes plus the first twelve of the public suffix. The keystream leaks from the one known pair, and the rewrite flips only that block.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">cipher</span><code>ctr(P, &amp;KEY, NONCE)<span class="muted"> → the 78-byte ciphertext, bytes 32..48 = 7fc4a018 768dccb2 f891f15e 51831d4f : the honest profile</span></code></div>
+      <div class="ex-row"><span class="ex-k">leak</span><code>K[i] = P[i] ^ C[i] over 32..48<span class="muted"> → 3e85e159 4deea3df 95f49f2a 63be387d : the raw keystream of the one known block</span></code></div>
+      <div class="ex-row out"><span class="ex-k">forge</span><code>C'[i] = K[i] ^ "AAAA;admin=true;"<span class="muted"> → bytes 32..48 = 7fc4a018 768fc7b2 fc9aa25e 11cb5d46 ; the first 4 are unchanged, the rest decode to the token</span></code></div>
+    </div>
+    <p>Every byte outside 32..48 is bit-identical to the honest ciphertext, so the check door's decrypt yields a valid profile containing ";admin=true;".</p>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>the service's ciphertext of PREFIX ++ "AAAA" ++ SUFFIX under the fixed KEY, NONCE 0; the attacker holds the ciphertext and knows the entire plaintext (public delimiters + own input)</code></div>
+      <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>() → true: the forged ciphertext decrypts to a profile containing ";admin=true;"; the tests pin the honest reject, the forged pass, the forged-range decode, the front-door inject attempts, the range-only-touch invariant, the determinism, and one property: no ";"/"="-free input ever surfaces the token</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set4/l002.rs</code><span class="sep">·</span> helpers: <code>util/ctr</code> (<code>ctr</code>)<span class="sep">·</span> <em>no new error variant, no data file</em><span class="sep">·</span> tests: <code>mod bitflip</code> in <code>set4/l002.rs</code> (6 unit: the honest reject, the forged pass, the forged-range decode, the front-door inject attempt, the range-only-touch, the determinism · 1 property: no ";"/"="-free input ever surfaces the target) · doctests: <code>encryption_oracle</code>, <code>is_admin</code>, <code>solve</code></p>
   </section>
 
 
