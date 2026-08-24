@@ -41,6 +41,7 @@ pub fn solve(current_unix_time: u32, first_output: u32) -> Result<u32, CpalError
 #[cfg(test)]
 mod solve {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn recovers_a_seed_inside_the_window() {
@@ -58,5 +59,31 @@ mod solve {
     fn a_seed_outside_the_window_is_not_found() {
         let err = solve(1_700_005_000, 1_001_043_830).expect_err("the seed is 5000 s back");
         assert_eq!(err, CpalError::NoSeedFound);
+    }
+
+    // Both properties assert the solver's documented contract (recovery / NoSeedFound),
+    // which is only sound where no two distinct seeds share a first word: the solver
+    // returns the *first* matching candidate, so a colliding partner would be returned
+    // instead. MT19937's first draw is verified injective on [0, 110_000], so both
+    // domains keep `seed` in 1_000..=100_000: with `back`/`gap` at most 10_000, every
+    // candidate the solver tests stays inside [0, 110_000], and the floor of 1_000
+    // keeps the search's `wrapping_sub` from underflowing into the far-future range.
+    proptest! {
+        #[test]
+        fn a_seed_inside_the_window_is_recovered(seed in 1_000u32..=100_000, back in 0u32..=WINDOW) {
+            let observed = seed + back;
+            let word = Mt19937::new(seed).next_u32();
+            prop_assert_eq!(solve(observed, word), Ok(seed));
+        }
+
+        #[test]
+        fn a_seed_outside_the_window_yields_no_seed_found(
+            seed in 1_000u32..=100_000,
+            gap in (WINDOW + 1)..=10_000,
+        ) {
+            let observed = seed + gap;
+            let word = Mt19937::new(seed).next_u32();
+            prop_assert_eq!(solve(observed, word), Err(CpalError::NoSeedFound));
+        }
     }
 }

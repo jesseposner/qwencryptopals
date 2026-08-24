@@ -199,7 +199,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–4</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 228 unit + 41 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 230 unit + 41 doc tests</div>
 </div>
 
 <header class="hero">
@@ -213,7 +213,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   </p>
   <div class="pills">
     <span class="pill g"><b>26</b> levels</span>
-    <span class="pill"><b>228</b> unit + <b>41</b> doc tests</span>
+    <span class="pill"><b>230</b> unit + <b>41</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">11 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
@@ -1960,6 +1960,7 @@ fn temper(mut word: u32) -> u32 {
       <li><code>wrapping_sub</code> keeps the loop total when the observation time is under 1000: the low candidates wrap to the far future and simply never match, so the semantics stay "search the last 1000 timestamps".</li>
       <li>Each trial is one seed-stretch, one twist, one temper, so a full 1000-candidate window costs roughly a thousand word operations, no optimization needed.</li>
       <li>The <code>NoSeedFound</code> variant in <code>util/err.rs</code> is the just-in-time error addition this level needed; its not-found test uses a window verified collision-free against the C oracle.</li>
+      <li>Two properties pin the same contract over the whole domain the window can reach: any seed inside the window is recovered, and a seed outside it is <code>NoSeedFound</code>. MT19937's first draw is not injective, so both stay inside a seed range verified collision-free.</li>
     </ul>
 
     <h3>Worked example</h3>
@@ -1972,9 +1973,9 @@ fn temper(mut word: u32) -> u32 {
     <h3>Official I/O</h3>
     <div class="io">
       <div class="io-row"><span class="io-k in">input</span><code>observed first output 1_001_043_830, observed at Unix time 1_700_000_040 (the challenge's waits, simulated)</code></div>
-      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve</span>(1_700_000_040, 1_001_043_830) → 1_700_000_000; the tests also pin a seed at the 1000 s edge and a collision-free <code>NoSeedFound</code> window</code></div>
+      <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>(1_700_000_040, 1_001_043_830) → 1_700_000_000; the tests also pin a seed at the 1000 s edge, a collision-free <code>NoSeedFound</code> window, and two properties over the verified collision-free domain</code></div>
     </div>
-    <p class="files"><strong>Files</strong> <code>src/sets/set3/l006.rs</code> (the search) reusing <code>util/mt19937.rs</code><span class="sep">·</span> <em>new error variant</em> <code>NoSeedFound</code> in <code>util/err.rs</code><span class="sep">·</span> tests: <code>mod solve</code> in <code>set3/l006.rs</code> (a seed inside the window, a seed at the 1000 s edge, a not-found window · doctest)</p>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l006.rs</code> (the search) reusing <code>util/mt19937.rs</code><span class="sep">·</span> <em>new error variant</em> <code>NoSeedFound</code> in <code>util/err.rs</code><span class="sep">·</span> tests: <code>mod solve</code> in <code>set3/l006.rs</code> (a seed inside the window, a seed at the 1000 s edge, a not-found window · 2 properties over the verified collision-free domain · doctest)</p>
   </section>
 
   <!-- L23 -->
