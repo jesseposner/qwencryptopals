@@ -199,7 +199,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–3</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 199 unit + 33 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 206 unit + 34 doc tests</div>
 </div>
 
 <header class="hero">
@@ -212,8 +212,8 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>22</b> levels</span>
-    <span class="pill"><b>199</b> unit + <b>33</b> doc tests</span>
+    <span class="pill g"><b>23</b> levels</span>
+    <span class="pill"><b>206</b> unit + <b>34</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">11 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
@@ -252,6 +252,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l20" data-toc><span class="n">L20</span>Detect block cipher mode</a></li>
       <li><a href="#l21" data-toc><span class="n">L21</span>Mersenne Twister RNG</a></li>
       <li><a href="#l22" data-toc><span class="n">L22</span>Crack an MT19937 seed</a></li>
+      <li><a href="#l23" data-toc><span class="n">L23</span>Clone an MT19937 RNG</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -261,7 +262,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the twenty-two levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the twenty-three levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -289,8 +290,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9 L10 L12 L13 L14 L15 L16 L17</span></div></div>
       <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13 L14</span></div></div>
       <div class="row"><div class="mod">util::cbc</div><div class="desc"><code>encrypt</code> and <code>decrypt</code> — hand-rolled CBC chaining over the AES core. <span class="lvl">· L10 L11 L16 L17</span></div></div>
-      <div class="row"><div class="mod">util::ctr</div><div class="desc"><code>ctr</code> — the AES-CTR keystream, one involutive function that both encrypts and decrypts; no chaining, no padding. Plus <code>shared_keystream</code> and <code>recover</code> — the fixed-nonce keystream-reuse break (XOR a known pair to peel the shared stream back off every message). <span class="lvl">· L18 · L19</span></div></div>
-      <div class="row"><div class="mod">util::mt19937</div><div class="desc"><code>Mt19937::new(seed)</code> + <code>next_u32</code> — the Mersenne Twister, 624 words of 32-bit state, period 2^19937 − 1: the machine behind most languages' <code>rand()</code>. <span class="lvl">· L21 · L22</span></div></div>
+      <div class="row"><div class="mod">util::mt19937</div><div class="desc"><code>Mt19937::new(seed)</code> + <code>next_u32</code> — the Mersenne Twister, 624 words of 32-bit state, period 2^19937 − 1: the machine behind most languages' <code>rand()</code>. Plus <code>untemper</code> (the temper's exact inverse, the order-8 cascade included) and <code>from_outputs</code> (splice one full pass of outputs back into a live generator). <span class="lvl">· L21 · L22 · L23</span></div></div>
       <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
     </div>
   </section>
@@ -1906,7 +1906,7 @@ fn temper(mut word: u32) -> u32 {
 }</code></pre></div>
     <ul class="notes">
       <li>The twist is a single forward in-place loop: each <code>state[k]</code> is written from <code>state[(k + M) % N]</code> plus a mix of the two words ahead, which is safe because the twist always reads ahead of where it writes. The two-loop form in the C reference is the same computation split to avoid the modulo.</li>
-      <li><code>next_u32</code> is the only method besides <code>new</code>: the state and index are private, so the module cannot leak an untempered word. The follow-up challenge (state recovery) will need state access; that surface is added just-in-time.</li>
+      <li><code>next_u32</code> is the only drawing method besides <code>new</code>: the state and index are private, so the module cannot leak an untempered word. The follow-ups that need the raw state get it just-in-time, as <a href="#l23">L23</a>'s <code>from_outputs</code> adds.</li>
       <li>No new <code>CpalError</code> variant, no data file: the RNG is generated in the crate, and <code>solve</code> returns the raw <code>Vec&lt;u32&gt;</code> stream, no <code>Result</code>.</li>
     </ul>
 
@@ -1969,6 +1969,67 @@ fn temper(mut word: u32) -> u32 {
       <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve</span>(1_700_000_040, 1_001_043_830) → 1_700_000_000; the tests also pin a seed at the 1000 s edge and a collision-free <code>NoSeedFound</code> window</code></div>
     </div>
     <p class="files"><strong>Files</strong> <code>src/sets/set3/l006.rs</code> (the search) reusing <code>util/mt19937.rs</code><span class="sep">·</span> <em>new error variant</em> <code>NoSeedFound</code> in <code>util/err.rs</code><span class="sep">·</span> tests: <code>mod solve</code> in <code>set3/l006.rs</code> (a seed inside the window, a seed at the 1000 s edge, a not-found window · doctest)</p>
+  </section>
+
+  <!-- L23 -->
+  <section id="l23" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L23</span>
+      <h2>Clone an MT19937 RNG from its output</h2>
+      <span class="chip">set3::l007</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">The internal state of MT19937 consists of 624 32-bit integers; each output is a <em>tempered</em> state word, not the raw word. The temper is invertible, so one full batch of 624 consecutive outputs that begins at a twist boundary is exactly enough to reconstruct the whole state: untemper each output back into its state word, splice the 624 words into a fresh generator, and the clone is bit-for-bit the original, producing every word the original would have produced from that point on. Then, tap it and predict the next output.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>L22 cracked the <em>seed</em> by brute-forcing a tiny time window. This level is the other side of the same machine: you never need the seed, you only need one full pass of outputs. Each of the 624 outputs is the raw state word run through the four-pass temper of <a href="#l21">L21</a>; the temper only permutes the bits of that word, so it is reversible. Undo the four passes in reverse order and each output gives back its exact state word. One complete 624-word pass, untempered, is the generator's full state, and the whole attack is one untemper per word plus a splice. The machine that makes this work is a pair of functions added just-in-time to <a href="#l21"><code>util/mt19937</code></a>: <code>untemper</code> inverts the temper on one word, and <code>from_outputs</code> runs the 624 and splices the result into a fresh <code>Mt19937</code>.</p>
+    <div class="insight"><span class="tag">Core move</span><p>Inverting a masked left shift is not one step. The temper's <code>&gt;&gt; 18</code> inverts with a single <code>&gt;&gt; 18</code> (36 exceeds the word), its <code>&lt;&lt; 15 &amp; mask</code> inverts with one reapplication, its <code>&gt;&gt; 11</code> cascades a second <code>&gt;&gt; 22</code> step, but its <code>&lt;&lt; 7 &amp; mask</code> is an order-8 permutation, so the inverse is seven more applications. Get the cascade right and one pass of outputs reconstructs the whole state.</p></div>
+
+    <h3>The code</h3>
+    <p>Two new functions sit in <code>util/mt19937.rs</code>; the level's <code>solve</code> is the one-line splice.</p>
+    <div class="code-wrap"><pre><code>pub fn untemper(mut word: u32) -&gt; u32 {
+    word ^= word &gt;&gt; 18;
+    word ^= (word &lt;&lt; 15) &amp; 0xEFC60000;
+    for _ in 0..7 {
+        word ^= (word &lt;&lt; 7) &amp; 0x9D2C5680;
+    }
+    word ^= word &gt;&gt; 11;
+    word ^= word &gt;&gt; 22;
+    word
+}
+
+pub fn from_outputs(outputs: &amp;[u32; 624]) -&gt; Self {
+    let mut state = [0u32; N];
+    for i in 0..N {
+        state[i] = untemper(outputs[i]);
+    }
+    Self { state, idx: N }   // next draw twists, exactly like the original
+}</code></pre></div>
+    <div class="code-wrap"><pre><code>pub fn solve(outputs: &amp;[u32; 624]) -&gt; Mt19937 {
+    Mt19937::from_outputs(outputs)
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>from_outputs</code> positions the spliced generator at <code>idx = N</code>, so its first draw twists the reconstructed state, exactly as the original does at the same point: the clone and the original stay in lockstep from the splice onward.</li>
+      <li>The batch must be one complete pass, 624 draws beginning at a twist boundary. A partial or misaligned batch untempers into the wrong state, and the clone diverges on the very next draw.</li>
+      <li>No new <code>CpalError</code> variant, no data file: the attack is pure word arithmetic, and <code>solve</code> hands back the live generator so the caller can keep tapping it, no <code>Result</code>.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>Seed 5489, tap 624 words (the first full pass), untemper each, and splice. The clone's first draw is the original's word 624, the first word of the second pass: <code>4178893912</code>. The doctest pins exactly this clone-and-predict.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">capture</span><code>624 outputs of <code>Mt19937::new(5489)</code>, from the twist boundary<span class="muted"> → one full pass = the complete state, disguised</span></code></div>
+      <div class="ex-row"><span class="ex-k">untemper + splice</span><code><span class="solve">solve</span>(&amp;batch) → a fresh generator whose state matches the original's<span class="muted"> → the raw state, recovered without the seed</span></code></div>
+      <div class="ex-row out"><span class="ex-k">predict</span><code>clone.next_u32() = 4178893912  <span class="muted">→ equals the original's word 624; the stream is now readable</span></code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>one full pass: 624 consecutive 32-bit outputs of an MT19937, aligned to a twist boundary</code></div>
+      <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>(batch) → a live <code>Mt19937</code> whose next draw is the original's next output; the tests pin seed 5489's second-pass head, a seed-0 clone tracked 640 words across its own twist, and a proptest that a clone of any seed stays in sync through the next boundary</code></div>
+    </div>
   </section>
 
 
