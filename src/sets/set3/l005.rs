@@ -1,4 +1,4 @@
-//! Set 3, Challenge 21 - Implement the Mersenne Twister RNG.
+//! Set 3, Challenge 21 — Implement the Mersenne Twister RNG.
 //!
 //! Most languages' `rand()` is the Mersenne Twister, and the challenge is to hand-roll the
 //! machine instead of calling the library: the 624-word `u32` state, the seed-stretch

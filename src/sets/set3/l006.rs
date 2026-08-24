@@ -1,4 +1,4 @@
-//! Set 3, Challenge 22 - Crack an MT19937 seed.
+//! Set 3, Challenge 22 — Crack an MT19937 seed.
 //!
 //! An MT19937 seeded with a Unix timestamp is a vulnerability in waiting: the seed space is
 //! "seconds since 1970", so an attacker who sees one output and roughly knows when it was

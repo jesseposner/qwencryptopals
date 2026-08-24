@@ -1,4 +1,4 @@
-//! Set 1 / Level 1 — Convert hex to base64.
+//! Set 1, Challenge 1 — Convert hex to base64.
 //!
 //! Official Cryptopals vector: the given hex blob must encode to the given base64 string.
 //! Per the Cryptopals rule we operate on raw bytes; hex (in) and base64 (out) are just I/O.
@@ -7,7 +7,7 @@ use crate::util::b64;
 use crate::util::err::CpalError;
 use crate::util::hex;
 
-/// Solve Level 1: decode the input hex, then re-encode those bytes as base64.
+/// Solve Challenge 1: decode the input hex, then re-encode those bytes as base64.
 ///
 /// # Errors
 ///

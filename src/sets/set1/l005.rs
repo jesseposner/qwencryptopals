@@ -1,4 +1,4 @@
-//! Set 1 / Level 5 — Repeating-key XOR.
+//! Set 1, Challenge 5 — Repeating-key XOR.
 //!
 //! The plaintext is XOR'd against a key that cycles from its start. The official vector is a
 //! hex plaintext and a hex key; per the Cryptopals rule we work on raw bytes and treat hex
@@ -8,7 +8,7 @@ use crate::util::err::CpalError;
 use crate::util::hex;
 use crate::util::xor;
 
-/// Solve Level 5: hex-decode the plaintext and key, then return the repeating-key XOR
+/// Solve Challenge 5: hex-decode the plaintext and key, then return the repeating-key XOR
 /// ciphertext.
 ///
 /// # Errors

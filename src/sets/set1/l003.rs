@@ -1,4 +1,4 @@
-//! Set 1 / Level 3 — Single-byte XOR cipher.
+//! Set 1, Challenge 3 — Single-byte XOR cipher.
 //!
 //! A message was XOR'd using a single byte repeated across the whole buffer. The official
 //! ciphertext is hex-encoded; per the Cryptopals rule we decode it to raw bytes, then search
@@ -9,7 +9,7 @@ use crate::util::err::CpalError;
 use crate::util::freq;
 use crate::util::hex;
 
-/// Solve Level 3: find the single-byte XOR key and return it alongside the decrypted
+/// Solve Challenge 3: find the single-byte XOR key and return it alongside the decrypted
 /// plaintext.
 ///
 /// # Errors

@@ -1,4 +1,4 @@
-//! Set 3 / Challenge 18 — Implement CTR, the stream cipher mode.
+//! Set 3, Challenge 18 — Implement CTR, the stream cipher mode.
 //!
 //! CTR is the one block mode good code actually ships. Instead of encrypting the plaintext, a
 //! running 16-byte counter is fed through the AES core to make a keystream, which is XORed over the

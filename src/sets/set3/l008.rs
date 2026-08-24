@@ -1,4 +1,4 @@
-//! Set 3, Challenge 24 - Create an MT19937 stream cipher and break it.
+//! Set 3, Challenge 24 — Create an MT19937 stream cipher and break it.
 //!
 //! Any PRNG makes a trivial stream cipher: generate 8-bit outputs, call them
 //! the keystream, and XOR the plaintext against it byte by byte. This level

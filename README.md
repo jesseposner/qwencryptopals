@@ -3,9 +3,9 @@
 Hand-rolled [Cryptopals](https://cryptopals.com/) solutions in Rust, one level at a time.
 We hand-roll the cryptography: every Set 1 level is built from `std` plus `thiserror`
 (compile-time `Display`/`Error` derives for `CpalError`). The one exception is
-**Set 1 / Level 7** (AES-128 in ECB mode), which uses the
+**Set 1, Challenge 7** (AES-128 in ECB mode), which uses the
 [`aes`](https://docs.rs/aes) crate for the AES block primitive itself — plus its
-`generic-array` 16-byte wrapper. **Set 2 / Level 11** (the ECB/CBC detection oracle)
+`generic-array` 16-byte wrapper. **Set 2, Challenge 11** (the ECB/CBC detection oracle)
 adds a single runtime dependency, [`rand`](https://docs.rs/rand), to draw the oracle's
 random key, prefix/suffix and mode.
 
@@ -70,18 +70,18 @@ src/
     mt19937.rs         MT19937 (Mersenne Twister): 624-word u32 state, twist + temper, 2^19937-1 period
   sets/
     set1/
-      l001.rs … l008.rs    Set 1, Levels 1–8
+      l001.rs … l008.rs    Set 1, Challenges 1–8
     set2/
-      l001.rs … l008.rs    Set 2, Levels 1–8 (PKCS#7, CBC, ECB/CBC oracle, byte-at-a-time ECB, cut-and-paste ECB, byte-at-a-time harder, PKCS#7 pad validation, CBC bit-flip)
+      l001.rs … l008.rs    Set 2, Challenges 9–16 (PKCS#7, CBC, ECB/CBC oracle, byte-at-a-time ECB, cut-and-paste ECB, byte-at-a-time harder, PKCS#7 pad validation, CBC bit-flip)
     set3/
-      l001.rs            Set 3, Level 1 (the CBC padding oracle)
-      l002.rs            Set 3, Level 2 (AES-128-CTR stream cipher)
-      l003.rs            Set 3, Level 3 (break fixed-nonce CTR via keystream reuse)
-      l004.rs            Set 3, Level 4 (block cipher mode detection)
-      l005.rs            Set 3, Level 5 (implement the MT19937 Mersenne Twister RNG)
-      l006.rs            Set 3, Level 6 (crack an MT19937 seed)
-      l007.rs            Set 3, Level 7 (clone an MT19937 RNG from its output)
-      l008.rs            Set 3, Level 8 (create an MT19937 stream cipher and break it)
+      l001.rs            Set 3, Challenge 17 (the CBC padding oracle)
+      l002.rs            Set 3, Challenge 18 (AES-128-CTR stream cipher)
+      l003.rs            Set 3, Challenge 19 (break fixed-nonce CTR via keystream reuse)
+      l004.rs            Set 3, Challenge 20 (block cipher mode detection)
+      l005.rs            Set 3, Challenge 21 (implement the MT19937 Mersenne Twister RNG)
+      l006.rs            Set 3, Challenge 22 (crack an MT19937 seed)
+      l007.rs            Set 3, Challenge 23 (clone an MT19937 RNG from its output)
+      l008.rs            Set 3, Challenge 24 (create an MT19937 stream cipher and break it)
 data/
   challenge_04.txt, challenge_06.txt, challenge_07.txt, challenge_08.txt,
   challenge_10.txt   official Cryptopals payloads read by their test modules

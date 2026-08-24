@@ -1,4 +1,4 @@
-//! Set 2 / Level 1 — Implement PKCS#7 padding.
+//! Set 2, Challenge 9 — Implement PKCS#7 padding.
 //!
 //! A block cipher eats a fixed-size block but the messages we hand it are irregularly sized, so
 //! we fill the final block out to a whole multiple of the block length. PKCS#7 does this by
@@ -12,7 +12,7 @@
 use crate::util::err::CpalError;
 use crate::util::pad;
 
-/// Solve Level 1 (Set 2): PKCS#7-pad the ASCII `plaintext` to `block_size` and return the padded
+/// Solve Challenge 9: PKCS#7-pad the ASCII `plaintext` to `block_size` and return the padded
 /// bytes.
 ///
 /// # Errors

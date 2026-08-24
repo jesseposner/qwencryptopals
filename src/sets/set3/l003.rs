@@ -1,4 +1,4 @@
-//! Set 3 / Challenge 19 — Break fixed-nonce CTR mode using substitutions.
+//! Set 3, Challenge 19 — Break fixed-nonce CTR mode using substitutions.
 //!
 //! CTR with a **fixed nonce** (here `0`) and a counter that restarts for every message is a stream
 //! cipher run with the same keystream prefix over and over. Every ciphertext is therefore XORed

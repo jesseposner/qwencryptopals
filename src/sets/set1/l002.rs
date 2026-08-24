@@ -1,4 +1,4 @@
-//! Set 1 / Level 2 — Fixed XOR.
+//! Set 1, Challenge 2 — Fixed XOR.
 //!
 //! Two equal-length buffers are XOR'd byte-wise; the official Cryptopals vectors are
 //! hex-encoded. Per the Cryptopals rule we decode to raw bytes, XOR, and keep the result
@@ -8,7 +8,7 @@ use crate::util::err::CpalError;
 use crate::util::hex;
 use crate::util::xor;
 
-/// Solve Level 2: hex-decode both buffers, XOR them byte-wise, and return the result.
+/// Solve Challenge 2: hex-decode both buffers, XOR them byte-wise, and return the result.
 ///
 /// # Errors
 ///

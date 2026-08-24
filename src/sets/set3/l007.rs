@@ -1,4 +1,4 @@
-//! Set 3, Challenge 23 - Clone an MT19937 RNG from its output.
+//! Set 3, Challenge 23 — Clone an MT19937 RNG from its output.
 //!
 //! MT19937's 624-word internal state is never exposed directly: every output is a
 //! *tempered* state word, not the word itself. The temper is invertible, so one full

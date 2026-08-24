@@ -1,4 +1,4 @@
-//! Set 2 / Level 2 — Implement CBC mode.
+//! Set 2, Challenge 10 — Implement CBC mode.
 //!
 //! A block cipher can only transform one block at a time, so to move a real message we chain
 //! blocks: each plaintext block is XORed with the *previous ciphertext* block before it is handed

@@ -3,7 +3,7 @@
 //! The "black box" picks a random AES-128 key, prepends 5–10 random bytes and appends 5–10
 //! random bytes to the caller's input, then encrypts the whole thing under either ECB or CBC
 //! (chosen at random; CBC uses a fresh random IV). The key and IV are thrown away, so all the
-//! caller is handed is ciphertext. The trick (from Set 1 / L8) is that ECB is deterministic: two
+//! caller is handed is ciphertext. The trick (from L8) is that ECB is deterministic: two
 //! identical 16-byte plaintext blocks yield two identical 16-byte ciphertext blocks, whereas CBC's
 //! fresh IV and chaining scatter them. So the detector just looks for the repeated-block signature.
 //!
@@ -47,7 +47,7 @@ pub fn solve(input: &[u8], rng: &mut impl Rng) -> BlockMode {
     detect_mode(&oracle(input, rng))
 }
 
-/// The detection core (Set 1 / L8's repeated-block rule, generalized to a single ciphertext): it
+/// The detection core (L8's repeated-block rule, generalized to a single ciphertext): it
 /// reports [`BlockMode::Ecb`] when the ciphertext carries two identical 16-byte blocks, and
 /// [`BlockMode::Cbc`] otherwise.
 pub fn detect_mode(ct: &[u8]) -> BlockMode {
