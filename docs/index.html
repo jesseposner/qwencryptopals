@@ -199,12 +199,12 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–3</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 206 unit + 34 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 212 unit + 36 doc tests</div>
 </div>
 
 <header class="hero">
   <p class="kicker">Cryptopals · Sets 1–3 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–3, Levels L1–L22 — annotated walkthrough</h1>
+  <h1>Sets 1–3, Levels L1–L24 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -212,8 +212,8 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>23</b> levels</span>
-    <span class="pill"><b>206</b> unit + <b>34</b> doc tests</span>
+    <span class="pill g"><b>24</b> levels</span>
+    <span class="pill"><b>212</b> unit + <b>36</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">11 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
@@ -253,6 +253,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l21" data-toc><span class="n">L21</span>Mersenne Twister RNG</a></li>
       <li><a href="#l22" data-toc><span class="n">L22</span>Crack an MT19937 seed</a></li>
       <li><a href="#l23" data-toc><span class="n">L23</span>Clone an MT19937 RNG</a></li>
+      <li><a href="#l24" data-toc><span class="n">L24</span>MT19937 stream cipher</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -262,7 +263,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the twenty-three levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the twenty-four levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -290,7 +291,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9 L10 L12 L13 L14 L15 L16 L17</span></div></div>
       <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13 L14</span></div></div>
       <div class="row"><div class="mod">util::cbc</div><div class="desc"><code>encrypt</code> and <code>decrypt</code> — hand-rolled CBC chaining over the AES core. <span class="lvl">· L10 L11 L16 L17</span></div></div>
-      <div class="row"><div class="mod">util::mt19937</div><div class="desc"><code>Mt19937::new(seed)</code> + <code>next_u32</code> — the Mersenne Twister, 624 words of 32-bit state, period 2^19937 − 1: the machine behind most languages' <code>rand()</code>. Plus <code>untemper</code> (the temper's exact inverse, the order-8 cascade included) and <code>from_outputs</code> (splice one full pass of outputs back into a live generator). <span class="lvl">· L21 · L22 · L23</span></div></div>
+      <div class="row"><div class="mod">util::mt19937</div><div class="desc"><code>Mt19937::new(seed)</code> + <code>next_u32</code> — the Mersenne Twister, 624 words of 32-bit state, period 2^19937 − 1: the machine behind most languages' <code>rand()</code>. Plus <code>untemper</code> (the temper's exact inverse, the order-8 cascade included) and <code>from_outputs</code> (splice one full pass of outputs back into a live generator). <span class="lvl">· L21 · L22 · L23 · L24</span></div></div>
       <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
     </div>
   </section>
@@ -2031,6 +2032,72 @@ pub fn from_outputs(outputs: &amp;[u32; 624]) -&gt; Self {
       <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>(batch) → a live <code>Mt19937</code> whose next draw is the original's next output; the tests pin seed 5489's second-pass head, a seed-0 clone tracked 640 words across its own twist, and a proptest that a clone of any seed stays in sync through the next boundary</code></div>
     </div>
   </section>
+  <!-- L24 -->
+  <section id="l24" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L24</span>
+      <h2>Create an MT19937 stream cipher and break it</h2>
+      <span class="chip">set3::l008</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Any PRNG makes a trivial stream cipher: generate 8-bit outputs, call them the keystream, and XOR the plaintext against them. Do it with MT19937 and a 16-bit seed, and verify that encrypting and decrypting both work. Then use it to encrypt a known plaintext, fourteen consecutive <code>A</code> characters behind a random prefix of random characters, and recover the 16-bit seed from the ciphertext. The same idea mints a "password reset token" from the current time, and the check is whether a given token could actually be the output of a time-seeded MT19937.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>The cipher is the easy half: the words of <a href="#l21">L21</a> are four keystream bytes each, low byte first, and the cipher is one XOR, so it is its own inverse, the same shape as the CTR code of <a href="#l18">L18</a>. The break is the seed, not the machine. A 16-bit seed is 65536 candidates, and the known tail pins the check: the attacker saw the whole ciphertext and knows the plaintext ends in fourteen <code>A</code> bytes, so they decrypt the ciphertext with each candidate seed and keep the one whose plaintext still ends in that tail. A wrong seed XORs two different keystreams into the last fourteen positions and reads as random noise, so exactly one candidate matches, and the ascending scan makes the answer deterministic. The "password reset token" half is just <a href="#l22">L22</a>'s window attack with a smaller candidate set: a token seeded from the current time only ever took one of a few thousand seeds.</p>
+    <div class="insight"><span class="tag">Core move</span><p>Recovery is not a cryptanalysis of MT19937, it is a size argument: 2^16 candidates against a 14-byte check. One <code>encrypt</code> call per candidate, one <code>ends_with</code> check, and the seed is the only candidate that survives. No untempering, no state splicing: the known tail does the whole job.</p></div>
+
+    <h3>The code</h3>
+    <p>The level module is two functions; the machine they build on is <a href="#l21"><code>util/mt19937</code></a>.</p>
+    <div class="code-wrap"><pre><code>pub fn encrypt(plain: &amp;[u8], seed: u16) -&gt; Vec&lt;u8&gt; {
+    let mut rng = Mt19937::new(seed as u32);
+    let mut out = Vec::with_capacity(plain.len());
+    let mut word = 0u32;
+    let mut byte_in_word = 4u32; // force a fresh word before the first byte
+    for &amp;b in plain {
+        if byte_in_word == 4 {
+            word = rng.next_u32();
+            byte_in_word = 0;
+        }
+        out.push(b ^ ((word &gt;&gt; (8 * byte_in_word)) as u8));
+        byte_in_word += 1;
+    }
+    out
+}</code></pre></div>
+    <div class="code-wrap"><pre><code>pub fn solve(ciphertext: &amp;[u8], known_tail: &amp;[u8]) -&gt; Result&lt;u16, CpalError&gt; {
+    if ciphertext.len() &lt; known_tail.len() {
+        return Err(CpalError::CiphertextTooShort(ciphertext.len()));
+    }
+    for seed in 0..=u16::MAX {
+        if encrypt(ciphertext, seed).ends_with(known_tail) {
+            return Ok(seed);
+        }
+    }
+    Err(CpalError::NoSeedFound)
+}</code></pre></div>
+    <ul class="notes">
+      <li>The keystream is four bytes per word, low byte first: the first stream byte is the low byte of the first tempered word. Encrypting sixteen zero bytes gives the raw keystream, and the tests pin its head for seeds 0 and 1 against the locked <a href="#l21">L21</a> vectors.</li>
+      <li>No new <code>CpalError</code> variant: a too-short ciphertext reuses <code>CiphertextTooShort</code>, and an unmatchable tail reuses <code>NoSeedFound</code>.</li>
+      <li><code>encrypt</code> is the decrypt: XOR is its own inverse, so the cipher and its break share one function, the way the CTR level's <code>ctr</code> does.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>Encrypt <code>"qwencryptopals"</code> plus the fourteen <code>A</code> tail under seed <code>0x5432</code>, then recover it:</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">encrypt</span><code>encrypt(b"qwencryptopalsAAAAAAAAAAAAAA", 0x5432)<span class="muted"> → the ciphertext: the 14 A bytes scrambled into keystream noise</span></code></div>
+      <div class="ex-row"><span class="ex-k">solve</span><code>solve(&amp;ct, b"AAAAAAAAAAAAAA")<span class="muted"> → decrypt all 65536 candidates, check the tail</span></code></div>
+      <div class="ex-row out"><span class="ex-k">seed</span><code>Ok(0x5432)<span class="muted"> → the only candidate whose plaintext still ends in the known 14 A's</span></code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>a ciphertext of (random prefix + fourteen <code>A</code> bytes) under a 16-bit MT19937 seed, plus the known tail</code></div>
+      <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>(ct, tail) → the 16-bit seed; the tests pin <code>encrypt(b"AAAA", 1234) = [110, 42, 70, 112]</code>, the keystream heads of seeds 0 and 1, the <code>0x5432</code> recovery, an unmatchable-tail <code>NoSeedFound</code>, a too-short-ciphertext error, and a proptest that encrypting twice returns the plaintext for every seed</code></div>
+    </div>
+  </section>
+
 
 
   <!-- Error type appendix -->
@@ -2045,7 +2112,7 @@ pub fn from_outputs(outputs: &amp;[u32; 624]) -&gt; Self {
       <div class="row"><div class="v">InvalidBase64Length(n)</div><div class="m">A base64 string whose length or padding is structurally invalid. · <strong>util::b64 — L1 L6 L7</strong></div></div>
       <div class="row"><div class="v">NoLines</div><div class="m">No candidate lines were supplied to inspect. · <strong>L4 L8</strong></div></div>
       <div class="row"><div class="v">EmptyKey</div><div class="m">The repeating-key operation has no key bytes. · <strong>util::xor — L5</strong></div></div>
-      <div class="row"><div class="v">CiphertextTooShort(n)</div><div class="m">The base64-decoded ciphertext is too short to analyze. · <strong>L6</strong></div></div>
+      <div class="row"><div class="v">CiphertextTooShort(n)</div><div class="m">The base64-decoded ciphertext is too short to analyze. · <strong>L6 · L24</strong></div></div>
       <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7 L10 L11 L13 L18</strong></div></div>
       <div class="row"><div class="v">CiphertextNotBlockAligned(n)</div><div class="m">An AES ciphertext whose length is not a multiple of 16. · <strong>L7 L10 L13 L17</strong></div></div>
       <div class="row"><div class="v">PlaintextNotBlockAligned(n)</div><div class="m">A plaintext whose length is not a multiple of 16, so it can't be fed to a block-cipher mode. · <strong>L11</strong></div></div>
@@ -2054,7 +2121,7 @@ pub fn from_outputs(outputs: &amp;[u32; 624]) -&gt; Self {
       <div class="row"><div class="v">InvalidBlockSize(n)</div><div class="m">A PKCS#7 block size outside <code>1..=255</code> was requested. · <strong>L9</strong></div></div>
       <div class="row"><div class="v">BadPadding(n)</div><div class="m">A buffer's PKCS#7 padding is malformed for its block size. · <strong>util::pad (pkcs7_unpad) · L15 L16 L17</strong></div></div>
       <div class="row"><div class="v">AuthFailed</div><div class="m">A cookie decrypted and parsed, but its <code>role</code> is not <code>admin</code> — the honest outcome for every real user. · <strong>L13</strong></div></div>
-      <div class="row"><div class="v">NoSeedFound</div><div class="m">No seed in the searched 1000 s window produced the observed RNG output. · <strong>L22</strong></div></div>
+      <div class="row"><div class="v">NoSeedFound</div><div class="m">No candidate seed in the searched range reproduced the observed RNG output. · <strong>L22 · L24</strong></div></div>
     </div>
   </section>
 
