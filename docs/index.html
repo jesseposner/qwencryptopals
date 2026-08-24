@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Annotated walkthrough of all Cryptopals Set 1–3 challenges, wired to the actual Rust code in the qwencryptopals repo.">
+<meta name="description" content="Annotated walkthrough of all Cryptopals Set 1–4 challenges, wired to the actual Rust code in the qwencryptopals repo.">
 <meta name="color-scheme" content="dark">
-<title>Cryptopals Sets 1–3 · Annotated Walkthrough</title>
+<title>Cryptopals Sets 1–4 · Annotated Walkthrough</title>
 <style>
 :root{
   --bg:#0f172a; --bg-2:#0b1120; --panel:#1e293b; --panel-2:#16202f;
@@ -198,13 +198,13 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 <body>
 
 <div class="topbar">
-  <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–3</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 212 unit + 36 doc tests</div>
+  <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–4</small></div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 221 unit + 38 doc tests</div>
 </div>
 
 <header class="hero">
-  <p class="kicker">Cryptopals · Sets 1–3 · Byte/Stream &amp; Block Ciphers</p>
-  <h1>Sets 1–3, Levels L1–L24 — annotated walkthrough</h1>
+  <p class="kicker">Cryptopals · Sets 1–4 · Byte/Stream &amp; Block Ciphers</p>
+  <h1>Sets 1–4, Levels L1–L25 — annotated walkthrough</h1>
   <p class="lead">
     Each section pairs a challenge with the <strong>actual Rust code</strong> in this repo:
     the idea, the solver, a worked example with real values, and the official Cryptopals
@@ -212,13 +212,14 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
     <code>docs/index.html</code> in a browser.
   </p>
   <div class="pills">
-    <span class="pill g"><b>24</b> levels</span>
-    <span class="pill"><b>212</b> unit + <b>36</b> doc tests</span>
+    <span class="pill g"><b>25</b> levels</span>
+    <span class="pill"><b>221</b> unit + <b>38</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">11 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
     <span class="pill">Set 2 · block ciphers</span>
     <span class="pill">Set 3 · CTR &amp; the padding oracle</span>
+    <span class="pill">Set 4 · stream ciphers</span>
   </div>
 </header>
 
@@ -254,6 +255,8 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><a href="#l22" data-toc><span class="n">L22</span>Crack an MT19937 seed</a></li>
       <li><a href="#l23" data-toc><span class="n">L23</span>Clone an MT19937 RNG</a></li>
       <li><a href="#l24" data-toc><span class="n">L24</span>MT19937 stream cipher</a></li>
+      <li class="set-head" aria-hidden="true">Set 4 · Stream ciphers</li>
+      <li><a href="#l25" data-toc><span class="n">L25</span>Random-access CTR</a></li>
       <li><a href="#errors"><span class="n">#</span>Error type</a></li>
     </ul>
   </nav>
@@ -263,7 +266,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   <!-- Reading guide -->
   <section id="intro" class="block">
     <h2>How to read this page</h2>
-    <p>Every one of the twenty-four levels is laid out the same way, so once you know the shape of one level you know them all:</p>
+    <p>Every one of the twenty-five levels is laid out the same way, so once you know the shape of one level you know them all:</p>
     <ul>
       <li><strong>The problem</strong> — Cryptopals' official wording and the fixed input vector.</li>
       <li><strong>The idea</strong> — the single concept the level is really testing.</li>
@@ -271,7 +274,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <li><strong>Worked example</strong> — a few real bytes, by hand, so you can watch it happen.</li>
       <li><strong>Official I/O</strong> — the exact inputs and outputs the tests assert against.</li>
     </ul>
-    <p>The library is <code>src/lib.rs</code>; the challenges live in <code>src/sets/set1/</code> and <code>src/sets/set2/</code> and the reusable helpers in <code>src/util/</code>. The test suite is the definition of "done".</p>
+    <p>The library is <code>src/lib.rs</code>; the challenges live in <code>src/sets/set1/</code> through <code>src/sets/set4/</code> and the reusable helpers in <code>src/util/</code>. The test suite is the definition of "done".</p>
     <ul class="notes">
       <li>The trusted gate (fmt + test + clippy) is <code>just gate</code>. Run one level's own tests with <code>just lvl set1 l003</code>.</li>
       <li><code>L1</code>–<code>L6</code> are hand-rolled in <code>src/util/</code> on raw bytes. <code>L7</code> pulls in the <code>aes</code> crate for AES-128 itself; <code>L8</code> just reuses <code>util::hex</code>.</li>
@@ -291,6 +294,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
       <div class="row"><div class="mod">util::pad</div><div class="desc"><code>pkcs7_pad</code> and <code>pkcs7_unpad</code>, exact inverses — fill a message to whole blocks. <span class="lvl">· L9 L10 L12 L13 L14 L15 L16 L17</span></div></div>
       <div class="row"><div class="mod">util::aes</div><div class="desc"><code>ecb_encrypt</code> and <code>ecb_decrypt</code> — the raw 16-byte block form of AES-128-ECB, pinned to SP 800-38A. <span class="lvl">· L11 L12 L13 L14</span></div></div>
       <div class="row"><div class="mod">util::cbc</div><div class="desc"><code>encrypt</code> and <code>decrypt</code> — hand-rolled CBC chaining over the AES core. <span class="lvl">· L10 L11 L16 L17</span></div></div>
+      <div class="row"><div class="mod">util::ctr</div><div class="desc"><code>ctr</code> (AES-128-CTR, involutive) + <code>shared_keystream</code> / <code>recover</code> for fixed-nonce reuse. <span class="lvl">· L18 · L19 · L25</span></div></div>
       <div class="row"><div class="mod">util::mt19937</div><div class="desc"><code>Mt19937::new(seed)</code> + <code>next_u32</code> — the Mersenne Twister, 624 words of 32-bit state, period 2^19937 − 1: the machine behind most languages' <code>rand()</code>. Plus <code>untemper</code> (the temper's exact inverse, the order-8 cascade included) and <code>from_outputs</code> (splice one full pass of outputs back into a live generator). <span class="lvl">· L21 · L22 · L23 · L24</span></div></div>
       <div class="row"><div class="mod">util::err</div><div class="desc"><code>CpalError</code>, one variant per failure mode; full table in the <a href="#errors">appendix</a>. <span class="lvl">· all</span></div></div>
     </div>
@@ -2097,6 +2101,70 @@ pub fn from_outputs(outputs: &amp;[u32; 624]) -&gt; Self {
       <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>(ct, tail) → the 16-bit seed; the tests pin <code>encrypt(b"AAAA", 1234) = [110, 42, 70, 112]</code>, the keystream heads of seeds 0 and 1, the <code>0x5432</code> recovery, an unmatchable-tail <code>NoSeedFound</code>, a too-short-ciphertext error, and a proptest that encrypting twice returns the plaintext for every seed</code></div>
     </div>
   </section>
+  <!-- L25 -->
+  <section id="l25" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L25</span>
+      <h2>Break "random access read/write" AES CTR</h2>
+      <span class="chip">set4::l001</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Back to CTR. Encrypt the recovered plaintext from <a href="#l12">L12</a> (the ECB exercise) under CTR with a random key that is unknown to you, but that you hold on to. Now, write the code that lets you "seek" into the ciphertext, decrypt, and re-encrypt with different plaintext. Expose this as a function, like, <code>edit(ciphertext, key, offset, newtext)</code>. Imagine the "edit" function was exposed to attackers by means of an API call that did not reveal the key or the original plaintext; the attacker has the ciphertext and controls the offset and the "new text". Recover the original plaintext.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>The seek is the trap. The CTR keystream is a pure function of the key and the counter (<a href="#l18">L18</a>'s layout: 8-byte nonce, 8-byte little-endian block count), so byte N of the stream can be generated without walking from the start. Every call to <code>edit</code> produces the same keystream, and a single full-length zero edit at offset 0 hands the caller the raw stream: <code>0 ^ KS = KS</code>. The attacker already holds <code>C = P ^ KS</code>, so one byte-wise XOR gives P, the entire original plaintext, in a single oracle call, with the key never in sight. The challenge's food-for-thought variant is the same hole dressed up for disk encryption: a "seek" that can overwrite arbitrary plaintext at arbitrary positions is a keystream-leak machine.</p>
+    <div class="insight"><span class="tag">Core move</span><p>One full-length zero edit leaks the entire keystream, and <code>C ^ KS = P</code> reads the plaintext back in its entirety. One oracle call, key never in sight: the "random access read/write" primitive is the attack surface, not the cipher.</p></div>
+
+    <h3>The code</h3>
+    <p>The level module is two functions; the keystream they build on is <a href="#l18"><code>util/ctr</code></a>.</p>
+    <div class="code-wrap"><pre><code>pub fn edit(ct: &amp;[u8], key: &amp;[u8], offset: usize, newtext: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let plain = ctr::ctr(ct, key, NONCE)?;
+
+    if offset.checked_add(newtext.len()) &gt; Some(ct.len()) {
+        return Err(CpalError::CiphertextTooShort(offset));
+    }
+
+    let mut spliced = plain;
+    spliced.splice(offset..offset + newtext.len(), newtext.iter().copied());
+    Ok(ctr::ctr(&amp;spliced, key, NONCE)?)
+}</code></pre></div>
+    <div class="code-wrap"><pre><code>pub fn solve(
+    ct: &amp;[u8],
+    edit: &amp;dyn Fn(usize, &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt;,
+) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let keystream = edit(0, &amp;vec![0u8; ct.len()])?;
+    if keystream.len() != ct.len() {
+        return Err(CpalError::LengthMismatch {
+            a: ct.len(),
+            b: keystream.len(),
+        });
+    }
+    xor::xor(ct, &amp;keystream)
+}</code></pre></div>
+    <ul class="notes">
+      <li>The plaintext is what <a href="#l12">L12</a> recovered: 138 bytes, starting "Rollin' in my 5.0". <code>KEY</code> is a fixed 16-byte constant and <code>NONCE</code> is 0, only so the vectors are reproducible, the way <a href="#l17">L17</a> fixes its cookie key; in the challenge the key is unknown to the attacker, which is exactly what the attack exploits.</li>
+      <li>No new <code>CpalError</code> variant: a splice past the end reuses <code>CiphertextTooShort</code> (carrying the offending offset), a misaligned oracle answer reuses <code>LengthMismatch</code>, and a non-16-byte key reuses <code>InvalidKeyLength</code> from <code>ctr</code>.</li>
+      <li><code>edit</code> is decrypt, splice, re-encrypt: CTR is involutive (<a href="#l18">L18</a>), the re-encrypt reuses the same keystream, and every byte outside the splice comes back bit-identical.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>The service encrypts L12's 138-byte secret under the fixed KEY with NONCE 0, and one full-length zero edit leaks the keystream. The splice itself is visible too: writing <code>qwerty</code> at offset 7 turns bytes 7..13 from <code>20696e20 6d79</code> (" in my") into <code>b5bd304a 10b5</code>, while every other byte is untouched.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">cipher</span><code>ctr(&amp;secret, &amp;KEY, NONCE)<span class="muted"> → 138 bytes, starting c04485cd 8b0dfee4: the service's ciphertext</span></code></div>
+      <div class="ex-row"><span class="ex-k">leak</span><code>edit(&amp;ct, &amp;KEY, 0, zeros)<span class="muted"> → the raw keystream, starting 922be9a1 e263d9c4: 0 ^ KS is the keystream itself</span></code></div>
+      <div class="ex-row out"><span class="ex-k">solve</span><code>ct ^ keystream<span class="muted"> → the 138-byte secret, starting 526f6c6c 696e2720 ("Rollin' "): the entire plaintext in one call, key never in sight</span></code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>L12's recovered 138-byte secret, re-encrypted under CTR (the service KEY, NONCE 0); the attacker's only handle is the <code>edit</code> oracle</code></div>
+      <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>(ct, edit) → the 138-byte secret, starting <code>526f6c6c 696e2720</code>; the tests pin the raw-keystream leak, the splice at offset 7 with <code>qwerty</code>, the end-of-slice and key-length rejections, the no-op end edit, and two properties: any 1–256-byte secret round-trips, and <code>edit</code> is exactly splice-then-CTR</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set4/l001.rs</code><span class="sep">·</span> helpers: <code>util/ctr</code> (<code>ctr</code>) · <code>util/xor</code> (<code>xor</code>) · <code>set2/l004</code> (the secret) — <em>no new error variant, no data file</em><span class="sep">·</span> tests: <code>mod solve</code> in <code>set4/l001.rs</code> (7 unit: the L12-secret round-trip, the raw-keystream leak, the splice boundary, the end rejection, the key-length rejection, the empty document, the no-op end edit · 2 properties: any secret round-trips, edit = splice-then-CTR) · doctests: <code>edit</code>, <code>solve</code></p>
+  </section>
 
 
 
@@ -2107,13 +2175,13 @@ pub fn from_outputs(outputs: &amp;[u32; 624]) -&gt; Self {
     <div class="err-table">
       <div class="row"><div class="v">InvalidHexChar(c)</div><div class="m">A character that is not a valid hex digit. · <strong>L1 L2 L3 L4 L5 L8</strong></div></div>
       <div class="row"><div class="v">OddLength</div><div class="m">A hex string with an odd number of characters. · <strong>hex decode — L1 L2 L3 L4 L5 L8</strong></div></div>
-      <div class="row"><div class="v">LengthMismatch</div><div class="m">The two inputs to a byte-wise operation have differing lengths. · <strong>util::xor — L2</strong></div></div>
+      <div class="row"><div class="v">LengthMismatch</div><div class="m">The two inputs to a byte-wise operation have differing lengths. · <strong>util::xor — L2 · L25</strong></div></div>
       <div class="row"><div class="v">InvalidBase64Char(c)</div><div class="m">A character that is not in the base64 alphabet. · <strong>util::b64 — L1 L6 L7</strong></div></div>
       <div class="row"><div class="v">InvalidBase64Length(n)</div><div class="m">A base64 string whose length or padding is structurally invalid. · <strong>util::b64 — L1 L6 L7</strong></div></div>
       <div class="row"><div class="v">NoLines</div><div class="m">No candidate lines were supplied to inspect. · <strong>L4 L8</strong></div></div>
       <div class="row"><div class="v">EmptyKey</div><div class="m">The repeating-key operation has no key bytes. · <strong>util::xor — L5</strong></div></div>
-      <div class="row"><div class="v">CiphertextTooShort(n)</div><div class="m">The base64-decoded ciphertext is too short to analyze. · <strong>L6 · L24</strong></div></div>
-      <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7 L10 L11 L13 L18</strong></div></div>
+      <div class="row"><div class="v">CiphertextTooShort(n)</div><div class="m">The base64-decoded ciphertext is too short to analyze. · <strong>L6 · L24 · L25</strong></div></div>
+      <div class="row"><div class="v">InvalidKeyLength(n)</div><div class="m">An AES key that is not the 16 bytes AES-128 requires. · <strong>L7 L10 L11 L13 L18 L25</strong></div></div>
       <div class="row"><div class="v">CiphertextNotBlockAligned(n)</div><div class="m">An AES ciphertext whose length is not a multiple of 16. · <strong>L7 L10 L13 L17</strong></div></div>
       <div class="row"><div class="v">PlaintextNotBlockAligned(n)</div><div class="m">A plaintext whose length is not a multiple of 16, so it can't be fed to a block-cipher mode. · <strong>L11</strong></div></div>
       <div class="row"><div class="v">InvalidIvLength(n)</div><div class="m">An initialization vector that is not the 16 bytes a block-cipher mode requires. · <strong>L10 L11</strong></div></div>
@@ -2127,7 +2195,7 @@ pub fn from_outputs(outputs: &amp;[u32; 624]) -&gt; Self {
 
   <footer>
     <p class="kicker">Source</p>
-    <p>One Rust crate. The library is <code>src/lib.rs</code> — just <code>pub mod sets</code> and <code>pub mod util</code>. Each level is a small module under <code>src/sets/set1/</code>, <code>src/sets/set2/</code> or <code>src/sets/set3/</code> exposing a <code>solve</code> function and a <code>#[cfg(test)]</code> module with its own tests (unit and proptest property oracles). Shared primitives live in <code>src/util/</code>. The official challenge payloads ship under <code>data/challenge_04.txt</code>, <code>data/challenge_06.txt</code>, <code>data/challenge_07.txt</code>, <code>data/challenge_08.txt</code> and <code>data/challenge_10.txt</code>. Re-run everything — format, tests and clippy — with <code>just gate</code>.</p>
+    <p>One Rust crate. The library is <code>src/lib.rs</code> — just <code>pub mod sets</code> and <code>pub mod util</code>. Each level is a small module under <code>src/sets/set1/</code>, <code>src/sets/set2/</code>, <code>src/sets/set3/</code> or <code>src/sets/set4/</code> exposing a <code>solve</code> function and a <code>#[cfg(test)]</code> module with its own tests (unit and proptest property oracles). Shared primitives live in <code>src/util/</code>. The official challenge payloads ship under <code>data/challenge_04.txt</code>, <code>data/challenge_06.txt</code>, <code>data/challenge_07.txt</code>, <code>data/challenge_08.txt</code> and <code>data/challenge_10.txt</code>. Re-run everything — format, tests and clippy — with <code>just gate</code>.</p>
   </footer>
 
   </main>
