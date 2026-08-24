@@ -16,7 +16,7 @@
 //! [C23](crate::sets::set3::l007) exploits it: the four-pass temper is invertible, so one
 //! batch of 624 outputs reconstructs the whole 624-word state, and every later word falls out
 //! of the clone. `untemper` and [`Mt19937::from_outputs`] carry that recovery; [C24](crate::sets::set3::l008)
-//! wraps the same machine in a keystream cipher and recovers its 16-bit seed the same way.
+//! wraps the same machine in a keystream cipher and brute-forces its 16-bit seed off a known tail.
 
 /// The number of state words: 624 = 12 x 52, just past the 19937 bits of the 2^19937 - 1 period.
 const N: usize = 624;
