@@ -4,10 +4,11 @@ Hand-rolled [Cryptopals](https://cryptopals.com/) solutions in Rust, one level a
 We hand-roll the cryptography: every Set 1 level is built from `std` plus `thiserror`
 (compile-time `Display`/`Error` derives for `CpalError`). The one exception is
 **Set 1, Challenge 7** (AES-128 in ECB mode), which uses the
-[`aes`](https://docs.rs/aes) crate for the AES block primitive itself — plus its
-`generic-array` 16-byte wrapper. **Set 2, Challenge 11** (the ECB/CBC detection oracle)
-adds a single runtime dependency, [`rand`](https://docs.rs/rand), to draw the oracle's
-random key, prefix/suffix and mode.
+[`aes`](https://docs.rs/aes) crate for the AES block primitive itself, plus its
+`generic-array` 16-byte wrapper; that same crate then backs the Set 2–4 block-cipher
+helpers (`util/aes`, `util/cbc`, `util/ctr`). **Set 2, Challenge 11** (the ECB/CBC
+detection oracle) adds a single runtime dependency, [`rand`](https://docs.rs/rand),
+to draw the oracle's random key, prefix/suffix and mode.
 
 Helpers are added **just-in-time** — only when a level actually needs one. No pre-stubbing.
 
@@ -38,7 +39,7 @@ full list. The suite is **231 unit + 41 doc tests** and growing one level at a t
   verified with the commands above before each commit.
 - **Cryptopals rule.** Crypto happens on raw `&[u8]` / `Vec<u8>`; hex and base64 are
   transport/pretty-print layers only, never the operation.
-- **`util` helpers just-in-time.** A helper (`xor`, `stream_cipher`, …) is introduced only
+- **`util` helpers just-in-time.** A helper (`xor`, `ctr`, …) is introduced only
   when a level needs it.
 - **One module per level** under `sets/<setN>/lNN.rs` with a public `solve`.
 - **Errors** are a hand-grown, `thiserror`-derived `CpalError`; variants added just-in-time.
