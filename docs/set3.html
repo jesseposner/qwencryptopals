@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Annotated walkthrough of Cryptopals Set 3 (L17–L24), wired to the actual Rust code in the qwencryptopals repo.">
+<meta name="color-scheme" content="dark">
+<title>Set 3, Levels L17–L24 · qwencryptopals</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–4</small></div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 231 unit + 41 doc tests</div>
+</div>
+
+<header class="hero">
+  <p class="kicker">Cryptopals · Set 3 · CTR &amp; the padding oracle</p>
+  <h1>Set 3, Levels L17–L24</h1>
+  <p class="lead">
+    Each level pairs a challenge with the <strong>actual Rust code</strong> in this repo:
+    the idea, the solver, a worked example with real values, and the official Cryptopals
+    input/output. The reading guide and the error-type appendix live on the <a href="index.html">index</a>.
+  </p>
+</header>
+
+<div class="grid">
+  <nav class="toc" aria-label="Table of contents">
+    <p class="toc-title">Contents</p>
+    <ul class="toc-list">
+      <li><a href="index.html"><span class="n">←</span>Index</a></li>
+      <li class="set-head" aria-hidden="true">Set 3 · CTR &amp; the padding oracle</li>
+      <li><a href="#l17" data-toc><span class="n">L17</span>The CBC padding oracle</a></li>
+      <li><a href="#l18" data-toc><span class="n">L18</span>Implement CTR</a></li>
+      <li><a href="#l19" data-toc><span class="n">L19</span>Break fixed-nonce CTR</a></li>
+      <li><a href="#l20" data-toc><span class="n">L20</span>Detect block cipher mode</a></li>
+      <li><a href="#l21" data-toc><span class="n">L21</span>Mersenne Twister RNG</a></li>
+      <li><a href="#l22" data-toc><span class="n">L22</span>Crack an MT19937 seed</a></li>
+      <li><a href="#l23" data-toc><span class="n">L23</span>Clone an MT19937 RNG</a></li>
+      <li><a href="#l24" data-toc><span class="n">L24</span>MT19937 stream cipher</a></li>
+      <li><a href="index.html#errors"><span class="n">#</span>Error type</a></li>
+    </ul>
+  </nav>
+
+  <main>
+
+  <!-- L17 -->
+  <section id="l17" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L17</span>
+      <h2>The CBC padding oracle</h2>
+      <span class="chip">set3::l001</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem</span>
+      <p class="official">The service you attack turns encrypted session cookies into plaintext behind the scenes, and <em>distinguishes</em> "padding was valid" from "padding was not" in its response. It happily decrypts any ciphertext you submit and tells you just that one bit. Armed with nothing but the oracle and each cookie's public IV, read the plaintext off — without the key.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>You can break CBC whenever a padding check leaks. CBC decodes block <code>i</code> as <code>P_i = D(C_i) XOR C_{i-1}</code>. You don't control <code>C_i</code> — you control the block slid <em>in front of</em> it. Submit the tampered pair <code>[B_i, C_i]</code>; the oracle runs padding on the first block, which decodes to <code>D(C_i) XOR B_i</code>. Since <code>D(C_i)</code> is fixed and unknown, that checked value is a constant XORed with sixteen bytes you choose. Force every byte <em>after</em> position <code>j</em> of <code>B_i</code> to make the tail read as a known <code>p = 16 − j</code>-byte pad, then sweep <code>B_i[j]</code> over all 256 values until the oracle goes green — that one value is <code>D(C_i)[j]</code>. Walk <code>j</code> back from 15 to 0 and you hold the whole raw block <code>D(C_i)</code>; the real plaintext block is just <code>D(C_i) XOR C_{i-1}</code> (the IV for the first).</p>
+    <div class="insight"><span class="tag">Core move</span><p>The oracle tells you about padding, not the key — but that one distinguishing bit, driven across sixteen bytes × up to 256 probes, peels <code>D(C_i)</code> off block by block. This is the most-deployed-in-the-wild attack in the set, and it runs on the very pad boundary L15 nailed down.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>pub fn solve(
+    ct: &amp;[u8],
+    iv: [u8; BLOCK],
+    oracle: &amp;dyn Fn(&amp;[u8]) -&gt; bool,
+) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    if ct.is_empty() || !ct.len().is_multiple_of(BLOCK) {
+        return Err(CpalError::CiphertextNotBlockAligned(ct.len()));
+    }
+
+    let blocks: Vec&lt;[u8; BLOCK]&gt; = ct.chunks_exact(BLOCK)
+        .map(|b| b.try_into().expect("chunk is exactly 16 bytes"))
+        .collect();
+
+    let mut out = Vec::with_capacity(ct.len());
+    for (i, block) in blocks.iter().enumerate() {
+        let raw = recover_raw(block, oracle);            // = D(C_i)
+        let prev: &amp;[u8] = if i == 0 { &amp;iv } else { &amp;blocks[i - 1] };
+        for k in 0..BLOCK {
+            out.push(raw[k] ^ prev[k]);                  // P_i = D(C_i) XOR C_{i-1}
+        }
+    }
+
+    pad::pkcs7_unpad(&amp;out, BLOCK)
+}</code></pre></div>
+    <ul class="notes">
+      <li>The attacker's whole interface is <code>oracle</code> (<code>padding_oracle</code>) and the public <code>iv</code> — <code>KEY</code> is a fixed, hidden constant the solver never reads. <code>solve</code>'s signature is deliberately <code>ct</code> + <code>iv</code> + <code>oracle</code>, so the attack is provably key-free.</li>
+      <li><code>make_cookie(seed)</code> deterministically picks one of the ten official C17 candidate cookies (opaque base64 vectors), pads, and CBC-encrypts it; a fixed <code>seed</code> makes the pick reproducible for the tests and doctests. <code>build_cookie</code> is the same path that also returns the chosen plaintext, purely so the tests can verify the attack against it without the solver ever touching it.</li>
+      <li>The recovered per-block value is the raw <code>D(C_i)</code>; only the final XOR against the predecessor (or IV) yields the plaintext, and stripping the trailing pad block leaves the body. A "shorter accidental pad" (a stray one-byte pad) is accepted on the strength that the forced <code>16 − j</code>-long run is, in practice, the value being hunted.</li>
+      <li>Only <code>util/cbc</code>, <code>util/pad</code> and <code>util/b64</code> are in play; <code>rand</code> supplies the seeded coin flip for the candidate pick. No new <code>CpalError</code> variant is needed — the two failure modes <code>solve</code> reports are already covered.</li>
+    </ul>
+
+    <details class="support">
+      <summary>supporting code · set3/l001 — recover one raw block</summary>
+      <div class="body">
+        <p>For byte <code>j</code> the target pad length is <code>16 − j</code>. Every byte after <code>j</code> is forced to that value with an already-recovered byte; then <code>j</code> is swept and accepted on the first green.</p>
+        <div class="code-wrap"><pre><code>fn recover_raw(target: &amp;[u8], oracle: &amp;dyn Fn(&amp;[u8]) -&gt; bool) -&gt; [u8; BLOCK] {
+    let mut raw = [0u8; BLOCK];
+    for j in (0..BLOCK).rev() {
+        let pad_value = (BLOCK - j) as u8;
+
+        let mut b = [0u8; BLOCK];
+        for i in (j + 1)..BLOCK {
+            b[i] = raw[i] ^ pad_value; // force every later byte to pad_value
+        }
+        for c in 0..=u8::MAX {
+            b[j] = c ^ pad_value;
+            let mut probe = [0u8; 2 * BLOCK];
+            probe[..BLOCK].copy_from_slice(&amp;b);
+            probe[BLOCK..].copy_from_slice(target);
+            if oracle(&amp;probe) {
+                raw[j] = c; // checked block j decrypts to pad_value only when raw[j] == c
+                break;
+            }
+        }
+    }
+    raw
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <p>Recover the last byte of block 0 (<code>j = 15</code>). Every byte after it is vacuous, so sweep <code>B_0[15]</code> over all 256 values, submitting <code>[B_0, C_0]</code>; the oracle goes green exactly when the forced last byte reads as a one-byte pad. That green value is <code>D(C_0)[15]</code>. Walk <code>j</code> back to 0 (a full sixteen-byte pad) and the whole raw block is in hand; then <code>P_0 = D(C_0) XOR IV</code>.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">j = 15</span><code>pad target 01 · sweep B_0[15] over 0..=255 · the c that makes the last byte 01 is D(C_0)[15]</code></div>
+      <div class="ex-row"><span class="ex-k">j = 14</span><code>pad target 02 · lock byte 15 to read 02 (via a known D(C_0)[15]) · sweep B_0[14] until green</code></div>
+      <div class="ex-row"><span class="ex-k">j = 0</span><code>pad target 10 · a whole block of 0x10 · sweep the very first byte; all 16 raw bytes recovered</code></div>
+      <div class="ex-row out"><span class="ex-k">total</span><code>each of 16 bytes needs at most 256 probes → ≤ 4096 oracle calls per block; strip the final padding block to get the body</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>a CBC ciphertext <span class="muted">ct</span> + its public <span class="muted">IV</span> + the padding oracle — no key</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve(ct, iv, &amp;oracle)</span> → <span class="muted">Ok(plaintext)</span>: the minted cookie's body with its PKCS#7 stripped; a 15-byte rag → <span class="muted">Err(CiphertextNotBlockAligned(15))</span></code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l001.rs</code><span class="sep">·</span> helpers: <code>util/cbc</code> (<code>encrypt</code>, <code>decrypt</code>) · <code>util/pad</code> (<code>pkcs7_pad</code>, <code>pkcs7_unpad</code>) · <code>util/b64</code> (<code>b64_decode</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>mod padding_oracle_attack</code> (6 unit + 1 mint-any-cookie property) · doctests: <code>make_cookie</code>, <code>padding_oracle</code>, <code>solve</code></p>
+  </section>
+
+  <!-- L18 -->
+  <section id="l18" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L18</span>
+      <h2>Implement CTR, the stream cipher mode</h2>
+      <span class="chip">set3::l002</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem</span>
+      <p class="official">Decrypt the blob at the top in CTR mode. CTR turns the AES block cipher into a stream cipher: instead of encrypting the plaintext, it encrypts a running 16-byte counter and XORs the resulting keystream against the data, and decrypting is the identical operation again. Base64 is only a transport — this is the cipher. The challenge fixes the parameters: key <code>YELLOW SUBMARINE</code>, nonce <code>0</code>, and a 16-byte counter built from an 8-byte nonce followed by an 8-byte little-endian block count.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>CBC chained each block to the previous <em>ciphertext</em>. CTR drops that feedback entirely and instead encodes a single monotone counter: the counter is fed through the AES block core, its 16-byte output is XORed against the next 16 bytes of the stream, and the counter rolls one for each block. Because the keystream depends on the key and the counter alone — not on the data — XOR is self-inverse and the same function that encrypts also decrypts. No chaining, no padding; when the stream ends mid-block, the last partial chunk just gets that many keystream bytes and stops.</p>
+    <div class="insight"><span class="tag">Core move</span><p>The counter is the only moving part: 8 fixed nonce bytes and a 8-byte little-endian block index starting at 0. Increment the index, encrypt its block under the key, XOR. Encrypt and decrypt are the <em>identical</em> function — the whole point of a stream cipher.</p></div>
+
+    <h3>The code</h3>
+    <p>The level is thin glue; the reusable keystream lives in <span class="muted">util::ctr</span>:</p>
+    <div class="code-wrap"><pre><code>pub fn ctr(stream: &amp;[u8], key: &amp;[u8], nonce: u64) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    if key.len() != BLOCK {
+        return Err(CpalError::InvalidKeyLength(key.len()));
+    }
+    let cipher = Aes128::new_from_slice(key).map_err(|_| CpalError::InvalidKeyLength(key.len()))?;
+    let prefix = nonce.to_le_bytes();
+
+    let mut out = Vec::with_capacity(stream.len());
+    for (i, chunk) in stream.chunks(BLOCK).enumerate() {
+        let mut counter = [0u8; BLOCK];
+        counter[..8].copy_from_slice(&amp;prefix);
+        counter[8..].copy_from_slice(&amp;(i as u64).to_le_bytes());
+
+        let mut keystream = GenericArray::clone_from_slice(&amp;counter);
+        cipher.encrypt_block(&amp;mut keystream);
+        for (j, &amp;b) in chunk.iter().enumerate() {
+            out.push(b ^ keystream[j]);
+        }
+    }
+    Ok(out)
+}</code></pre></div>
+    <p>And the level just b64-decodes the blob and hands it to that:</p>
+    <div class="code-wrap"><pre><code>pub fn solve(encrypted_b64: &amp;str, key: &amp;[u8], nonce: u64) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let ct = b64::b64_decode(encrypted_b64)?;
+    ctr::ctr(&amp;ct, key, nonce)
+}</code></pre></div>
+    <ul class="notes">
+      <li>The 16-byte counter is exactly the layout the challenge specifies: an 8-byte nonce in the low half and an 8-byte little-endian <em>block count</em> in the high half. The counter starts at 0 and rolls 16 bytes per block; after <code>i</code> blocks the low half carries <code>i</code>.</li>
+      <li>CTR is <em>involutive</em> — <code>ctr(ctr(x, k, n), k, n) == x</code>. There is no unpadding step, because there was never any padding: the stream simply stops when the stream ends, and the last partial block is XORed against just as many keystream bytes.</li>
+      <li>It reuses the same AES-128 block core that <code>util/aes</code> and <code>util/cbc</code> already wrap (<code>Aes128::encrypt_block</code>). The only new idea is XORing a counter instead of chaining ciphertext. No new <code>CpalError</code> variant — the only failure mode <code>ctr</code> can raise is a bad key length.</li>
+      <li>The test asserts a printable-ASCII proportion and a short head rather than pinning the whole decrypted string, because the level demonstrates the mode, not the message: a structural property proves the stream decoded correctly without hardcoding a large expected blob. An all-zero 16-byte stream under nonce 0 is cross-checked against plain <code>ecb_encrypt</code> of the same sixteen zero bytes, verifying the counter layout without duplicating the AES work.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>The official blob is 52 raw bytes: three full 16-byte blocks plus a 4-byte tail. The counter walks 0 → 3; every chunk XORed against the AES-encrypted counter block.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">block 0</span><code>counter = 00·00·00·00·00·00·00·00 || 00·00·00·00·00·00·00·00 → keystream</code></div>
+      <div class="ex-row"><span class="ex-k">block 1</span><code>counter = 00·00·00·00·00·00·00·00 || 01·00·00·00·00·00·00·00 → next 16 bytes of keystream</code></div>
+      <div class="ex-row"><span class="ex-k">tail</span><code>block 3 = 4 bytes: XOR only those 4 against the first 4 of that block's keystream — stop, don't pad</code></div>
+      <div class="ex-row out"><span class="ex-k">decrypt</span><code>run the identical counter 0 → 3 over the ciphertext, XOR again → the plaintext</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>base64 of a 52-byte CTR stream under key <span class="muted">b"YELLOW SUBMARINE"</span>, nonce 0</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve(blob, &amp;KEY, NONCE)</span> → <span class="muted">Ok(52 bytes)</span>: roughly English; a wrong-length key → <span class="muted">Err(InvalidKeyLength(n))</span></code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l002.rs</code><span class="sep">·</span> helpers: <code>util/ctr</code> (<code>ctr</code>, the reusable AES-CTR keystream) · <code>util/b64</code> (<code>b64_decode</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>util::ctr::ctr_fn</code> (6 unit + 1 CTR involutivity property) · <code>set3::l002::solve</code> (4 unit + 1 base64→solve round-trip property) · doctests: <code>ctr</code> on L18, <code>solve</code></p>
+   </section>
+
+  <section id="l19" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L19</span>
+      <h2>Break fixed-nonce CTR mode using substitutions</h2>
+      <span class="chip">set3::l003</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem</span>
+      <p class="official">Take CTR and fix its nonce to <code>0</code>, resetting the counter to zero before every message, and use it to encrypt several short messages. Because every message is XORed against the same leading keystream, the ciphertexts leak each other: recover the plaintext of all forty of them. The plaintext is W. B. Yeats's public-domain poem "Easter, 1916."</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>L18 showed that a CTR keystream depends on the <em>key</em> and the <em>counter</em> alone, never on the data. Fix the nonce and restart the counter for each message, and you have run the very same keystream prefix over every line. Two consequences fall out of a single XOR:</p>
+    <ul>
+      <li><strong>XOR two ciphertexts.</strong> c<sub>a</sub> ⊕ c<sub>b</sub> = (p<sub>a</sub> ⊕ k) ⊕ (p<sub>b</sub> ⊕ k) = p<sub>a</sub> ⊕ p<sub>b</sub>. The shared stream cancels, leaving the two plaintexts' XOR — useful even without knowing any plaintext at all.</li>
+      <li><strong>One known pair pins the stream.</strong> c<sub>x</sub> ⊕ p<sub>x</sub> = k, the shared keystream itself. XOR that back into every other ciphertext and, up to the known line's length, each target's bytes read off as plaintext. A known line at least as long as the longest target (line 38, 38 bytes here) recovers <em>all</em> of them; a shorter one recovers only the shared prefix, and the rest stays ciphertext.</li>
+    </ul>
+    <div class="insight"><span class="tag">Core move</span><p>Recover the keystream by XORing a known ciphertext against its plaintext. Apply that keystream to every other ciphertext and the whole range of lines is undone from a single substitution. The failure mode — a fixed, repeating nonce — is exactly the stream-cipher's only weakness.</p></div>
+
+    <h3>The code</h3>
+    <p>The reusable attack lives in <span class="muted">util::ctr</span>, right next to the L18 keystream:</p>
+    <div class="code-wrap"><pre><code>pub fn shared_keystream(known_ct: &amp;[u8], known_pt: &amp;[u8]) -&gt; Vec&lt;u8&gt; {
+    let n = known_ct.len().min(known_pt.len());
+    (0..n).map(|i| known_ct[i] ^ known_pt[i]).collect()
+}
+
+pub fn recover(ciphertexts: &amp;[Vec&lt;u8&gt;], known_ct: &amp;[u8], known_pt: &amp;[u8]) -&gt; Vec&lt;Vec&lt;u8&gt;&gt; {
+    let ks = shared_keystream(known_ct, known_pt);
+    ciphertexts
+        .iter()
+        .map(|ct| {
+            ct.iter()
+                .enumerate()
+                .map(|(i, &amp;b)| match ks.get(i) {
+                    Some(&amp;k) =&gt; b ^ k,  // keystream still active: decode to plaintext
+                    None =&gt; b,          // past the keystream: leave the ciphertext as-is
+                })
+                .collect()
+        })
+        .collect()
+}</code></pre></div>
+    <p>The level is again thin glue — mint the forty ciphertexts, then hand one known line to the attack:</p>
+    <div class="code-wrap"><pre><code>pub fn ciphers() -&gt; Vec&lt;Vec&lt;u8&gt;&gt; {
+    LINES
+        .iter()
+        .map(|line| ctr::ctr(line.as_bytes(), &amp;KEY, NONCE).expect("KEY is a 16-byte constant"))
+        .collect()
+}
+
+pub fn solve(ciphertexts: &amp;[Vec&lt;u8&gt;], known_ct: &amp;[u8], known_pt: &amp;[u8]) -&gt; Vec&lt;Vec&lt;u8&gt;&gt; {
+    ctr::recover(ciphertexts, known_ct, known_pt)
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>ciphers</code> is the vulnerable setup: each line is CTR-encrypted <em>independently</em> under the same <code>KEY</code> and nonce <code>0</code>, the counter restarting per line. No chaining, so every line reuses the keystream's first bytes.</li>
+      <li><code>shared_keystream</code> is just the byte-XOR of a known ciphertext and its plaintext; <code>recover</code> XORs that stream back into every target and explicitly leaves bytes past the stream as ciphertext (<code>None ⇒ b</code>), so a too-short known line cannot corrupt a longer target's tail.</li>
+      <li>Reusing one known line as long as the longest target makes the recovery total. The headline test asserts all forty recovered bytes equal <code>LINES</code>, so the recovered text is verified byte-for-byte without being re-printed in the source.</li>
+      <li>No new CpalError variant — the only CTR failure this level exercises is an ill-formed key length (caught by <code>ciphers</code>' <code>expect</code>), and the attack itself only XORs. No new data file: the ciphertexts are generated in-memory from the public-domain <code>LINES</code>.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>Line 38 is the longest, at 38 bytes: <code>"He, too, has been changed in his turn,"</code>. Knowing just that one line (ciphertext ⊕ plaintext) recovers a 38-byte keystream, which spans every other line's full length — so a single substitution undoes all forty.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">known pair</span><code>c[38] ⊕ p[38] = keystream[0..38]  <span class="muted">(p[38] = "He, too, has been changed in his turn,")</span></code></div>
+      <div class="ex-row"><span class="ex-k">one target</span><code>p[0] = "I have met them at close of day"  <span class="muted">(28 bytes)</span> = c[0] ⊕ keystream[0..28]</code></div>
+      <div class="ex-row"><span class="ex-k">ciphertexts</span><code>c[a] ⊕ c[b] = p[a] ⊕ p[b]  <span class="muted">— the stream cancels, no plaintext needed</span></code></div>
+      <div class="ex-row out"><span class="ex-k">recover</span><code>for every line, XOR keystream[0..len] back in → all forty lines of "Easter, 1916"</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>40 base64 lines, each CTR(0)-encrypted under one key and nonce 0 — here minted as <span class="solve">ciphers()</span> from public-domain <span class="muted">LINES</span></code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve(&amp;ciphers(), &amp;c[longest], LINES[longest])</span> → <span class="muted">Vec&lt;40 × Vec&lt;u8&gt;&gt;</span>: the recovered plaintext bytes; each equals its original line byte-for-byte</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l003.rs</code><span class="sep">·</span> helpers: <code>util/ctr</code> (<code>ctr</code> from L18 + new <code>shared_keystream</code>, <code>recover</code>) — <em>no new error variant, no new data file</em><span class="sep">·</span> tests: <code>util::ctr::reuse_fn</code> (3 unit + 2 property, the keystream-reuse invariants) · <code>set3::l003::recovery</code> (5 unit, incl. the full 40-line end-to-end recovery + 1 independent-CTR recovery property) · doctests: <code>shared_keystream</code>, <code>recover</code>, <code>ciphers</code>, <code>solve</code></p>
+  </section>
+
+  <section id="l20" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L20</span>
+      <h2>Detect block cipher mode</h2>
+      <span class="chip">set3::l004</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem</span>
+      <p class="official">Here are eighty 64-byte AES-128 ciphertexts, base64, each encrypted under a fresh random key you will never see. Half were made in ECB and half in CBC, interleaved. There is no key to recover and no oracle to query — you can only look. For every line, decide which mode produced it.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>The one difference that surfaces in the <em>ciphertext itself</em>, without a key, is whether blocks repeat. ECB is a stateless, deterministic function of each block: two identical 16-byte plaintext blocks become two identical 16-byte ciphertext blocks. CBC chains every block through the previous ciphertext and a fresh random IV, so two identical plaintext blocks land in two <strong>different</strong> ciphertext blocks. So the test is a single scan: does any 16-byte block appear twice? A repeat means ECB; no repeat means CBC. It is the very rule <a href="set1.html#l8"><code>L8</code></a> and <a href="set2.html#l11"><code>L11</code></a> already rely on, this time applied to a stored batch instead of a live oracle.</p>
+    <div class="insight"><span class="tag">Core move</span><p>Look for the repeated 16-byte block. Repeat ⇒ ECB, no repeat ⇒ CBC. No key, no oracle — the mode is written into the ciphertext blocks themselves, because only the deterministic mode preserves block equalities.</p></div>
+
+    <h3>The code</h3>
+    <p>The entire answer is a five-line scan plus a map of it over the batch. The detector is re-implemented here (rather than imported from L11) so the set3 module stays decoupled, and the batch is minted in the crate the way L19 mints its lines:</p>
+    <div class="code-wrap"><pre><code>pub fn classify(ct: &amp;[u8]) -&gt; BlockMode {
+    if has_repeated_block(ct) { BlockMode::Ecb } else { BlockMode::Cbc }
+}
+
+fn has_repeated_block(ct: &amp;[u8]) -&gt; bool {
+    let mut seen = std::collections::HashSet::new();
+    for block in ct.chunks_exact(BLOCK) {
+        if !seen.insert(block) {
+            return true;   // a 16-byte block already seen → deterministic mode
+        }
+    }
+    false
+}
+
+pub fn classify_batch(cts: &amp;[&amp;[u8]]) -&gt; Vec&lt;BlockMode&gt; {
+    cts.iter().map(|ct| classify(ct)).collect()
+}</code></pre></div>
+    <p>The batch is generated with a seeded key and IV per line: an ECB line repeats one 16-byte block four times; a CBC line uses four distinct blocks. The invariant each line must satisfy is pinned the moment it is minted, so the batch cannot silently stop classifying correctly:</p>
+    <div class="code-wrap"><pre><code>fn build(batch: usize, seed: u64) -&gt; (Vec&lt;Vec&lt;u8&gt;&gt;, Vec&lt;BlockMode&gt;) {
+    let mut rng = StdRng::seed_from_u64(seed);
+    ...
+    let ecb = i % 2 == 0;
+    let plain = if ecb { /* one 16-byte block, repeated ×4 */ }
+                else { /* four distinct 16-byte blocks */ };
+    let ct = if ecb { aes::ecb_encrypt(&amp;plain, &amp;key)? }
+             else { let iv = random(16); cbc::encrypt(&amp;plain, &amp;key, &amp;iv)? };
+    debug_assert_eq!(classify(&amp;ct), mode);   // ECB repeats, CBC does not
+    ...
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>classify_batch</code> <em>is</em> the solve: it maps the one-line detector over the batch. For the minted data its output equals the mode each line was built under, by construction — so the headline test only compares two <code>Vec&lt;BlockMode&gt;</code> values.</li>
+      <li>A second sanity check reuses <span class="muted">util::entropy</span>: an ECB line is four copies of one block — a narrow byte-value histogram, low Shannon entropy — while a CBC line spreads near-uniformly. Averaging all 40 of each, the ECB mean sits a wide margin below the CBC mean.</li>
+      <li>No new <code>CpalError</code> variant, no new data file: the eighty ciphertexts are minted in the crate from a seeded RNG, the way L17 mints its cookies and L19 mints its lines.</li>
+      <li>The detector is re-implemented rather than imported from L11. Keeping it local preserves the rule that each set module depends only on <span class="muted">util</span> — no cross-set import of <code>set2::l003::detect_mode</code>.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>Even line 0 (ECB): its 64-byte plaintext is one shared block repeated four times, so ECB emits four identical 16-byte ciphertext blocks — the scan finds a repeat at offsets 0/16/32/48 and reports <code>BlockMode::Ecb</code>. Line 1 (CBC): four distinct blocks under a fresh IV; no two ciphertext blocks agree, so <code>BlockMode::Cbc</code>. Of the 80 lines minted at seed 0, exactly the 40 even ones read ECB.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">L0 (ECB)</span><code>ct[0:16] == ct[16:32] == ct[32:48] == ct[48:64]  <span class="muted">→ BlockMode::Ecb</span></code></div>
+      <div class="ex-row"><span class="ex-k">L1 (CBC)</span><code>no two 16-byte slices agree  <span class="muted">→ BlockMode::Cbc</span></code></div>
+      <div class="ex-row out"><span class="ex-k">count</span><code><span class="solve">classify_batch</span>(mints) = [Ecb, Cbc, Ecb, Cbc, …]  →  40 × Ecb, 40 × Cbc</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>80 lines of 64-byte AES-128 ciphertext, 40 ECB + 40 CBC under seeded random keys — minted in-crate by <span class="solve">mint(80, 0)</span></code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">classify_batch</span>(mints) → <span class="muted">Vec&lt;BlockMode&gt;</span> (80 entries): even indices <span class="muted">Ecb</span>, odd <span class="muted">Cbc</span> — 40/40 correct each way</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l004.rs</code><span class="sep">·</span> helpers: <code>util/aes</code> (<code>ecb_encrypt</code>) · <code>util/cbc</code> (<code>encrypt</code>) · <code>util/entropy</code> (<code>normalized_shannon_entropy</code>) — <em>no new error variant, no new data file</em><span class="sep">·</span> tests: <code>mod solve</code> (5 unit: the ecb/cbc pair, the &lt;2-block edge, the full-80 recovery + 40-count, the 64-byte shape, the ECB&lt;CBC entropy gap · 1 property: <code>classify_batch</code> matches the minted mode across every <code>(seed, batch)</code> pair) · doctest: <code>mint</code></p>
+  </section>
+
+  <!-- L21 -->
+  <section id="l21" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L21</span>
+      <h2>Mersenne Twister RNG</h2>
+      <span class="chip">set3::l005</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem</span>
+      <p class="official">Most languages' <code>rand()</code> is the Mersenne Twister, and the challenge is to hand-roll the machine instead of calling the library: implement MT19937 from the C reference form, seed it with 5489, and print the first 32 32-bit words. The expected list is pinned on the challenge page, so a correct implementation matches it word for word.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>The whole machine is one 624-word <code>u32</code> array. A single 32-bit seed stretches across it: <code>s[0] = seed</code> and <code>s[i] = 1812433253 · (s[i−1] ⊕ s[i−1] &gt;&gt; 30) + i</code> (mod 2^32). Producing a word is two steps. When the state is exhausted it is <em>twisted</em>: each word becomes <code>s[k+397] ^ (y &gt;&gt; 1) ^ (low bit of y ? 0x9908B0DF : 0)</code>, where <code>y</code> is the top bit of <code>s[k]</code> or the low 31 bits of <code>s[k+1]</code>. The drawn word is then <em>tempered</em> with four XOR-shift passes that spread the low-bit correlation of the raw state word across all 32 bits. 624 words of 32 bits is 19968 bits, just past 19937: that is what makes the period 2^19937 − 1, the Mersenne prime the family is named for. One subtlety the reference values hinge on: the canonical form, the one <code>std::mt19937</code> runs, starts the draw index at 624, so the very first draw twists before it produces a word.</p>
+    <div class="insight"><span class="tag">Core move</span><p>Get the twist right: the <code>k+397</code> lag, the low bit that selects <code>MATRIX_A</code>, and the twist-before-first-draw convention. Every reference is the same machine (the C source, <code>std::mt19937</code>, Python's <code>random</code>), so a correct implementation agrees with all of them on every word, and the KATs pin the stream head, seed 0, and a triple that straddles the twist boundary.</p></div>
+
+    <h3>The code</h3>
+    <p>The machine is two small loops: a seed-stretch that fills the state, and the twist that runs when the 624 words are exhausted. The constants doing the work: <code>N = 624</code>, <code>M = 397</code>, <code>UPPER = 0x8000_0000</code>, <code>LOWER = 0x7FFF_FFFF</code>, <code>MATRIX_A = 0x9908_B0DF</code>, <code>SEED_MUL = 1_812_433_253</code>:</p>
+    <div class="code-wrap"><pre><code>pub fn new(seed: u32) -> Self {
+    let mut state = [0u32; N];
+    state[0] = seed;
+    for i in 1..N {
+        state[i] = SEED_MUL
+            .wrapping_mul(state[i - 1] ^ (state[i - 1] &gt;&gt; 30))
+            .wrapping_add(i as u32);
+    }
+    Self { state, idx: N }   // index 624: the first draw twists
+}</code></pre></div>
+    <div class="code-wrap"><pre><code>pub fn next_u32(&amp;mut self) -> u32 {
+    if self.idx &gt;= N {
+        for k in 0..N {
+            let y = (self.state[k] &amp; UPPER) | (self.state[(k + 1) % N] &amp; LOWER);
+            self.state[k] = self.state[(k + M) % N]
+                ^ (y &gt;&gt; 1)
+                ^ if y &amp; 1 != 0 { MATRIX_A } else { 0 };
+        }
+        self.idx = 0;
+    }
+    let word = self.state[self.idx];
+    self.idx += 1;
+    temper(word)
+}
+
+fn temper(mut word: u32) -> u32 {
+    word ^= word &gt;&gt; 11;
+    word ^= (word &lt;&lt; 7) &amp; 0x9D2C5680;
+    word ^= (word &lt;&lt; 15) &amp; 0xEFC60000;
+    word ^= word &gt;&gt; 18;
+    word
+}</code></pre></div>
+    <ul class="notes">
+      <li>The twist is a single forward in-place loop: each <code>state[k]</code> is written from <code>state[(k + M) % N]</code> plus a mix of the two words ahead, which is safe because the twist always reads ahead of where it writes. The two-loop form in the C reference is the same computation split to avoid the modulo.</li>
+      <li><code>next_u32</code> is the only drawing method besides <code>new</code>: the state and index are private, so the module cannot leak an untempered word. The follow-ups that need the raw state get it just-in-time, as <a href="#l23">L23</a>'s <code>from_outputs</code> adds.</li>
+      <li>No new <code>CpalError</code> variant, no data file: the RNG is generated in the crate, and <code>solve</code> returns the raw <code>Vec&lt;u32&gt;</code> stream, no <code>Result</code>.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p><code>Mt19937::new(5489)</code>: the first draw twists the freshly stretched state, reads word 0 (<code>0xD091BB5C</code>), tempers it, and hands back <code>3499211612</code>, the first word of the official 32-word list. Word 623 is the last draw of the first twisted pass and words 624–625 the first two of the second, so the boundary triple <code>[4020325887, 4178893912, 610818241]</code> is the one KAT that exercises the twist itself.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">seed 5489, draw 1</span><code>Mt19937::new(5489).next_u32() = 3499211612  <span class="muted">→ 0xD091BB5C, first word of the official list</span></code></div>
+      <div class="ex-row"><span class="ex-k">twist boundary</span><code>words 623–625 = 4020325887, 4178893912, 610818241  <span class="muted">→ straddle the twist between pass 1 and pass 2</span></code></div>
+      <div class="ex-row out"><span class="ex-k">solve</span><code><span class="solve">solve</span>(5489, 2) = [3499211612, 581869302]</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>seed 5489, 32 32-bit draws (the official list on the challenge page)</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve</span>(5489, 32) → <span class="muted">Vec&lt;u32&gt;</span> matching the official list; the KATs pin words 1–10, seed-0 words 1–5, and the twist-boundary triple 623–625</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/util/mt19937.rs</code> (the machine) + <code>src/sets/set3/l005.rs</code> (the surface)<span class="sep">·</span> <em>no new error variant, no data file</em>: the RNG is minted in the crate<span class="sep">·</span> tests: <code>mod tests</code> in <code>util/mt19937.rs</code> (5 KATs pinned against C, C++, and Python oracles: the 5489 stream head, the seed-0 head, the twist-boundary triple, the post-twist state, the second-pass head · 5 properties: same-seed determinism, different-seeds-diverge-on-the-first-draw, untemper-inverts-temper, a clone stays in sync across a batch, top-byte chi-square over 4096 draws · doctest) · <code>mod solve</code> in <code>set3/l005.rs</code> (the official stream, zero draws · 1 stream-length property · doctest)</p>
+  </section>
+
+  <!-- L22 -->
+  <section id="l22" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L22</span>
+      <h2>Crack an MT19937 seed</h2>
+      <span class="chip">set3::l006</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Make sure your MT19937 accepts an integer seed. Write a routine that performs the following operation: wait a random number of seconds between, I don't know, 40 and 1000; seed the RNG with the current Unix timestamp; wait a random number of seconds again; return the first 32-bit output of the RNG. From that 32-bit output, discover the seed.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>A timestamp-seeded RNG is a clock, not a source of entropy. The seed space is not 2^32; it is a few thousand Unix seconds, because the server's wait is bounded. An attacker who sees one 32-bit word and knows the observation time to within that window has only about 1000 candidates. Each candidate is one seed-stretch of the 624-word state, one twist, one temper, one comparison: a full window is a few thousand word operations, under a millisecond. The brute force is a loop, not a cryptographic attack on the algorithm. And the moment one output word matches, the seed is known, and the entire future stream is just <code>next_u32</code> called again. The machine is the one from <a href="#l21">L21</a>; this level is the observation side: walk the time window backward and find the seed whose first draw is the word you saw.</p>
+    <div class="insight"><span class="tag">Core move</span><p>Search backward from the observation time, not forward from the epoch: <code>for back in 0..=1000 { seed = current.wrapping_sub(back) }</code>. The newest candidate is the most plausible seed, so the first match is the deterministic, testable behavior. When no candidate in the window produces the observed word, the result is a new just-in-time <code>CpalError::NoSeedFound</code> variant.</p></div>
+
+    <h3>The code</h3>
+    <p>One loop over the window; each candidate seeds the machine from L21 and draws exactly one word. The window is a constant: 1000 s covers the challenge's upper bound on the wait.</p>
+    <div class="code-wrap"><pre><code>pub fn solve(current_unix_time: u32, first_output: u32) -&gt; Result&lt;u32, CpalError&gt; {
+    (0..=WINDOW)
+        .map(|back| current_unix_time.wrapping_sub(back))
+        .find(|&amp;seed| Mt19937::new(seed).next_u32() == first_output)
+        .ok_or(CpalError::NoSeedFound)
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>wrapping_sub</code> keeps the loop total when the observation time is under 1000: the low candidates wrap to the far future and simply never match, so the semantics stay "search the last 1000 timestamps".</li>
+      <li>Each trial is one seed-stretch, one twist, one temper, so a full 1000-candidate window costs roughly a thousand word operations, no optimization needed.</li>
+      <li>The <code>NoSeedFound</code> variant in <code>util/err.rs</code> is the just-in-time error addition this level needed; its not-found test uses a window verified collision-free against the C oracle.</li>
+      <li>Two properties pin the same contract over the whole domain the window can reach: any seed inside the window is recovered, and a seed outside it is <code>NoSeedFound</code>. MT19937's first draw is not injective, so both stay inside a seed range verified collision-free.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>The server seeded at Unix time 1700000000 and the attacker sees its first word, 1001043830, at roughly 1700000040. Walking back 1000 seconds from the observation time, 1700000000 is the only candidate whose first draw is 1001043830. The doctest pins exactly this recovery.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">observation</span><code>first word 1_001_043_830, observed around Unix time 1_700_000_040<span class="muted"> → the seed is at most 1000 s before the observation</span></code></div>
+      <div class="ex-row out"><span class="ex-k">recovery</span><code><span class="solve">solve</span>(1_700_000_040, 1_001_043_830) = 1_700_000_000<span class="muted"> → seed recovered; the future stream is now predictable</span></code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>observed first output 1_001_043_830, observed at Unix time 1_700_000_040 (the challenge's waits, simulated)</code></div>
+      <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>(1_700_000_040, 1_001_043_830) → 1_700_000_000; the tests also pin a seed at the 1000 s edge, a collision-free <code>NoSeedFound</code> window, and two properties over the verified collision-free domain</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l006.rs</code> (the search) reusing <code>util/mt19937.rs</code><span class="sep">·</span> <em>new error variant</em> <code>NoSeedFound</code> in <code>util/err.rs</code><span class="sep">·</span> tests: <code>mod solve</code> in <code>set3/l006.rs</code> (a seed inside the window, a seed at the 1000 s edge, a not-found window · 2 properties over the verified collision-free domain · doctest)</p>
+  </section>
+
+  <!-- L23 -->
+  <section id="l23" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L23</span>
+      <h2>Clone an MT19937 RNG from its output</h2>
+      <span class="chip">set3::l007</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">The internal state of MT19937 consists of 624 32-bit integers; each output is a <em>tempered</em> state word, not the raw word. The temper is invertible, so one full batch of 624 consecutive outputs that begins at a twist boundary is exactly enough to reconstruct the whole state: untemper each output back into its state word, splice the 624 words into a fresh generator, and the clone is bit-for-bit the original, producing every word the original would have produced from that point on. Then, tap it and predict the next output.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>L22 cracked the <em>seed</em> by brute-forcing a tiny time window. This level is the other side of the same machine: you never need the seed, you only need one full pass of outputs. Each of the 624 outputs is the raw state word run through the four-pass temper of <a href="#l21">L21</a>; the temper only permutes the bits of that word, so it is reversible. Undo the four passes in reverse order and each output gives back its exact state word. One complete 624-word pass, untempered, is the generator's full state, and the whole attack is one untemper per word plus a splice. The machine that makes this work is a pair of functions added just-in-time to <a href="#l21"><code>util/mt19937</code></a>: <code>untemper</code> inverts the temper on one word, and <code>from_outputs</code> runs the 624 and splices the result into a fresh <code>Mt19937</code>.</p>
+    <div class="insight"><span class="tag">Core move</span><p>Inverting a masked left shift is not one step. The temper's <code>&gt;&gt; 18</code> inverts with a single <code>&gt;&gt; 18</code> (36 exceeds the word), its <code>&lt;&lt; 15 &amp; mask</code> inverts with one reapplication, its <code>&gt;&gt; 11</code> cascades a second <code>&gt;&gt; 22</code> step, but its <code>&lt;&lt; 7 &amp; mask</code> is an order-8 permutation, so the inverse is seven more applications. Get the cascade right and one pass of outputs reconstructs the whole state.</p></div>
+
+    <h3>The code</h3>
+    <p>Two new functions sit in <code>util/mt19937.rs</code>; the level's <code>solve</code> is the one-line splice.</p>
+    <div class="code-wrap"><pre><code>pub fn untemper(mut word: u32) -&gt; u32 {
+    word ^= word &gt;&gt; 18;
+    word ^= (word &lt;&lt; 15) &amp; 0xEFC60000;
+    for _ in 0..7 {
+        word ^= (word &lt;&lt; 7) &amp; 0x9D2C5680;
+    }
+    word ^= word &gt;&gt; 11;
+    word ^= word &gt;&gt; 22;
+    word
+}
+
+pub fn from_outputs(outputs: &amp;[u32; 624]) -&gt; Self {
+    let mut state = [0u32; N];
+    for i in 0..N {
+        state[i] = untemper(outputs[i]);
+    }
+    Self { state, idx: N }   // next draw twists, exactly like the original
+}</code></pre></div>
+    <div class="code-wrap"><pre><code>pub fn solve(outputs: &amp;[u32; 624]) -&gt; Mt19937 {
+    Mt19937::from_outputs(outputs)
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>from_outputs</code> positions the spliced generator at <code>idx = N</code>, so its first draw twists the reconstructed state, exactly as the original does at the same point: the clone and the original stay in lockstep from the splice onward.</li>
+      <li>The batch must be one complete pass, 624 draws beginning at a twist boundary. A partial or misaligned batch untempers into the wrong state, and the clone diverges on the very next draw.</li>
+      <li>No new <code>CpalError</code> variant, no data file: the attack is pure word arithmetic, and <code>solve</code> hands back the live generator so the caller can keep tapping it, no <code>Result</code>.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>Seed 5489, tap 624 words (the first full pass), untemper each, and splice. The clone's first draw is the original's word 624, the first word of the second pass: <code>4178893912</code>. The doctest pins exactly this clone-and-predict.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">capture</span><code>624 outputs of <code>Mt19937::new(5489)</code>, from the twist boundary<span class="muted"> → one full pass = the complete state, disguised</span></code></div>
+      <div class="ex-row"><span class="ex-k">untemper + splice</span><code><span class="solve">solve</span>(&amp;batch) → a fresh generator whose state matches the original's<span class="muted"> → the raw state, recovered without the seed</span></code></div>
+      <div class="ex-row out"><span class="ex-k">predict</span><code>clone.next_u32() = 4178893912  <span class="muted">→ equals the original's word 624; the stream is now readable</span></code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>one full pass: 624 consecutive 32-bit outputs of an MT19937, aligned to a twist boundary</code></div>
+      <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>(batch) → a live <code>Mt19937</code> whose next draw is the original's next output; the tests pin seed 5489's second-pass head, a seed-0 clone tracked 640 words across its own twist, and a proptest that a clone of any seed stays in sync through the next boundary</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l007.rs</code> (the clone) reusing <code>util/mt19937.rs</code> (<code>untemper</code> + <code>from_outputs</code>)<span class="sep">·</span> <em>no new error variant, no data file</em><span class="sep">·</span> tests: <code>mod solve</code> in <code>set3/l007.rs</code> (2 unit: a seed-5489 clone predicting the reference second pass, a seed-0 clone tracking a fresh generator 640 words across its own twist · 1 property: a clone of any seed stays in sync across the next twist · doctest)</p>
+  </section>
+
+  <!-- L24 -->
+  <section id="l24" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L24</span>
+      <h2>Create an MT19937 stream cipher and break it</h2>
+      <span class="chip">set3::l008</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Any PRNG makes a trivial stream cipher: generate 8-bit outputs, call them the keystream, and XOR the plaintext against them. Do it with MT19937 and a 16-bit seed, and verify that encrypting and decrypting both work. Then use it to encrypt a known plaintext, fourteen consecutive <code>A</code> characters behind a random prefix of random characters, and recover the 16-bit seed from the ciphertext. The same idea mints a "password reset token" from the current time, and the check is whether a given token could actually be the output of a time-seeded MT19937.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>The cipher is the easy half: the words of <a href="#l21">L21</a> are four keystream bytes each, low byte first, and the cipher is one XOR, so it is its own inverse, the same shape as the CTR code of <a href="#l18">L18</a>. The break is the seed, not the machine. A 16-bit seed is 65536 candidates, and the known tail pins the check: the attacker saw the whole ciphertext and knows the plaintext ends in fourteen <code>A</code> bytes, so they decrypt the ciphertext with each candidate seed and keep the one whose plaintext still ends in that tail. A wrong seed XORs two different keystreams into the last fourteen positions and reads as random noise, so exactly one candidate matches, and the ascending scan makes the answer deterministic. The "password reset token" half is just <a href="#l22">L22</a>'s window attack with a smaller candidate set: a token seeded from the current time only ever took one of a few thousand seeds.</p>
+    <div class="insight"><span class="tag">Core move</span><p>Recovery is not a cryptanalysis of MT19937, it is a size argument: 2^16 candidates against a 14-byte check. One <code>encrypt</code> call per candidate, one <code>ends_with</code> check, and the seed is the only candidate that survives. No untempering, no state splicing: the known tail does the whole job.</p></div>
+
+    <h3>The code</h3>
+    <p>The level module is two functions; the machine they build on is <a href="#l21"><code>util/mt19937</code></a>.</p>
+    <div class="code-wrap"><pre><code>pub fn encrypt(plain: &amp;[u8], seed: u16) -&gt; Vec&lt;u8&gt; {
+    let mut rng = Mt19937::new(seed as u32);
+    let mut out = Vec::with_capacity(plain.len());
+    let mut word = 0u32;
+    let mut byte_in_word = 4u32; // force a fresh word before the first byte
+    for &amp;b in plain {
+        if byte_in_word == 4 {
+            word = rng.next_u32();
+            byte_in_word = 0;
+        }
+        out.push(b ^ ((word &gt;&gt; (8 * byte_in_word)) as u8));
+        byte_in_word += 1;
+    }
+    out
+}</code></pre></div>
+    <div class="code-wrap"><pre><code>pub fn solve(ciphertext: &amp;[u8], known_tail: &amp;[u8]) -&gt; Result&lt;u16, CpalError&gt; {
+    if ciphertext.len() &lt; known_tail.len() {
+        return Err(CpalError::CiphertextTooShort(ciphertext.len()));
+    }
+    for seed in 0..=u16::MAX {
+        if encrypt(ciphertext, seed).ends_with(known_tail) {
+            return Ok(seed);
+        }
+    }
+    Err(CpalError::NoSeedFound)
+}</code></pre></div>
+    <ul class="notes">
+      <li>The keystream is four bytes per word, low byte first: the first stream byte is the low byte of the first tempered word. Encrypting sixteen zero bytes gives the raw keystream, and the tests pin its head for seeds 0 and 1 against the locked <a href="#l21">L21</a> vectors.</li>
+      <li>No new <code>CpalError</code> variant: a too-short ciphertext reuses <code>CiphertextTooShort</code>, and an unmatchable tail reuses <code>NoSeedFound</code>.</li>
+      <li><code>encrypt</code> is the decrypt: XOR is its own inverse, so the cipher and its break share one function, the way the CTR level's <code>ctr</code> does.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>Encrypt <code>"qwencryptopals"</code> plus the fourteen <code>A</code> tail under seed <code>0x5432</code>, then recover it:</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">encrypt</span><code>encrypt(b"qwencryptopalsAAAAAAAAAAAAAA", 0x5432)<span class="muted"> → the ciphertext: the 14 A bytes scrambled into keystream noise</span></code></div>
+      <div class="ex-row"><span class="ex-k">solve</span><code>solve(&amp;ct, b"AAAAAAAAAAAAAA")<span class="muted"> → decrypt all 65536 candidates, check the tail</span></code></div>
+      <div class="ex-row out"><span class="ex-k">seed</span><code>Ok(0x5432)<span class="muted"> → the only candidate whose plaintext still ends in the known 14 A's</span></code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>a ciphertext of (random prefix + fourteen <code>A</code> bytes) under a 16-bit MT19937 seed, plus the known tail</code></div>
+      <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>(ct, tail) → the 16-bit seed; the tests pin <code>encrypt(b"AAAA", 1234) = [110, 42, 70, 112]</code>, the keystream heads of seeds 0 and 1, the <code>0x5432</code> recovery, an unmatchable-tail <code>NoSeedFound</code>, a too-short-ciphertext error, and a proptest that encrypting twice returns the plaintext for every seed</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set3/l008.rs</code> (the cipher + the break) reusing <code>util/mt19937.rs</code><span class="sep">·</span> <em>no new error variant</em> (reusing <code>NoSeedFound</code> + <code>CiphertextTooShort</code>), no data file<span class="sep">·</span> tests: <code>mod solve</code> in <code>set3/l008.rs</code> (5 unit: the cipher pin (encrypt KAT + seed-0/seed-1 keystream heads), the cipher-is-its-own-inverse, the 0x5432 recovery, an unmatchable-tail <code>NoSeedFound</code>, a too-short-ciphertext error · 1 property: encrypting twice returns the plaintext for every seed · doctests: <code>encrypt</code>, <code>solve</code>)</p>
+  </section>
+
+  <footer>
+    <p class="kicker">Source</p>
+    <p>One Rust crate. The library is <code>src/lib.rs</code> — just <code>pub mod sets</code> and <code>pub mod util</code>. Each level is a small module under <code>src/sets/set1/</code>, <code>src/sets/set2/</code>, <code>src/sets/set3/</code> or <code>src/sets/set4/</code> exposing a <code>solve</code> function and a <code>#[cfg(test)]</code> module with its own tests (unit and proptest property oracles). Shared primitives live in <code>src/util/</code>. The official challenge payloads ship under <code>data/challenge_04.txt</code>, <code>data/challenge_06.txt</code>, <code>data/challenge_07.txt</code>, <code>data/challenge_08.txt</code> and <code>data/challenge_10.txt</code>. Re-run everything — format, tests and clippy — with <code>just gate</code>.</p>
+  </footer>
+  </main>
+
+</div>
+
+<script src="docs.js" defer></script>
+</body>
+</html>

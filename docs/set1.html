@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Annotated walkthrough of Cryptopals Set 1 (L1–L8), wired to the actual Rust code in the qwencryptopals repo.">
+<meta name="color-scheme" content="dark">
+<title>Set 1, Levels L1–L8 · qwencryptopals</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–4</small></div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 231 unit + 41 doc tests</div>
+</div>
+
+<header class="hero">
+  <p class="kicker">Cryptopals · Set 1 · Byte/Stream ciphers</p>
+  <h1>Set 1, Levels L1–L8</h1>
+  <p class="lead">
+    Each level pairs a challenge with the <strong>actual Rust code</strong> in this repo:
+    the idea, the solver, a worked example with real values, and the official Cryptopals
+    input/output. The reading guide and the error-type appendix live on the <a href="index.html">index</a>.
+  </p>
+</header>
+
+<div class="grid">
+  <nav class="toc" aria-label="Table of contents">
+    <p class="toc-title">Contents</p>
+    <ul class="toc-list">
+      <li><a href="index.html"><span class="n">←</span>Index</a></li>
+      <li class="set-head" aria-hidden="true">Set 1 · Byte/Stream ciphers</li>
+      <li><a href="#l1" data-toc><span class="n">L1</span>hex to base64</a></li>
+      <li><a href="#l2" data-toc><span class="n">L2</span>Fixed XOR</a></li>
+      <li><a href="#l3" data-toc><span class="n">L3</span>Single-byte XOR</a></li>
+      <li><a href="#l4" data-toc><span class="n">L4</span>Detect single-char XOR</a></li>
+      <li><a href="#l5" data-toc><span class="n">L5</span>Repeating-key XOR</a></li>
+      <li><a href="#l6" data-toc><span class="n">L6</span>Break repeating-key XOR</a></li>
+      <li><a href="#l7" data-toc><span class="n">L7</span>AES-128 ECB</a></li>
+      <li><a href="#l8" data-toc><span class="n">L8</span>Detect AES in ECB</a></li>
+      <li><a href="index.html#errors"><span class="n">#</span>Error type</a></li>
+    </ul>
+  </nav>
+
+  <main>
+
+  <!-- L1 -->
+  <section id="l1" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L1</span>
+      <h2>Hex to base64</h2>
+      <span class="chip">set1::l001</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Convert a given hex blob to base64. You are handed <code>49276d…757368726f6f6d</code> and it must come out as <code>SSdt…c2hyb29t</code>.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>Hex and base64 are two spellings of the same bytes. Decode the hex to raw bytes, then re-encode those very same bytes as base64. No cryptography is involved — the discipline is simply to never "convert hex to base64" directly; the bytes in the middle are the thing.</p>
+    <div class="insight"><span class="tag">Core move</span><p><code>hex::from_hex(…)</code> hands you a <code>Vec&lt;u8&gt;</code>; <code>b64::b64_encode(&amp;…)</code> re-spells it. The encodings are transport; the bytes are data.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::b64;
+use crate::util::hex;
+
+pub fn solve(input_hex: &amp;str) -&gt; Result&lt;String, CpalError&gt; {
+    let bytes = hex::from_hex(input_hex)?;
+    Ok(b64::b64_encode(&amp;bytes))
+}</code></pre></div>
+    <ul class="notes">
+      <li>The <code>?</code> forwards any <code>from_hex</code> failure (odd length or a non-hex digit) up to the caller.</li>
+    </ul>
+    <details class="support" open>
+      <summary>supporting code · util/b64.rs — b64_encode</summary>
+      <div class="body">
+        <p>Three input bytes become one 24-bit number, split into four 6-bit indexes into the alphabet; a short final chunk produces <code>=</code> padding.</p>
+        <div class="code-wrap"><pre><code>pub fn b64_encode(input: &amp;[u8]) -&gt; String {
+    let mut out = String::with_capacity((input.len() / 3 + 1) * 4);
+
+    for chunk in input.chunks(3) {
+        let b0 = u32::from(chunk[0]);
+        let b1 = u32::from(chunk.get(1).copied().unwrap_or(0));
+        let b2 = u32::from(chunk.get(2).copied().unwrap_or(0));
+        let n = (b0 &lt;&lt; 16) | (b1 &lt;&lt; 8) | b2;
+
+        let i0 = (n &gt;&gt; 18 &amp; 0x3f) as usize;
+        let i1 = (n &gt;&gt; 12 &amp; 0x3f) as usize;
+        let i2 = (n &gt;&gt; 6 &amp; 0x3f) as usize;
+        let i3 = (n &amp; 0x3f) as usize;
+
+        out.push(ALPHABET[i0] as char);
+        out.push(ALPHABET[i1] as char);
+        out.push(ALPHABET[i2] as char);
+        out.push(ALPHABET[i3] as char);
+
+        if chunk.len() == 1 {
+            out.pop(); out.pop(); out.push('='); out.push('=');
+        } else if chunk.len() == 2 {
+            out.pop(); out.push('=');
+        }
+    }
+    out
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">first 3 bytes</span><code>49 27 6d  (hex)  =  "I'm"</code></div>
+      <div class="ex-row"><span class="ex-k">those as base64</span><code>"I'm"  →  SSdt</code></div>
+      <div class="ex-row out"><span class="ex-k">full result</span><code>SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input (hex)</span><code>49276d206b696c6c696e6720796f757220627261696e206c696b65206120706f69736f6e6f7573206d757368726f6f6d</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>SSdtIGtpbGxpbmcgeW91ciBicmFpbiBsaWtlIGEgcG9pc29ub3VzIG11c2hyb29t</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l001.rs</code><span class="sep">·</span> helpers <code>util/hex.rs</code>, <code>util/b64.rs</code><span class="sep">·</span> test: <code>mod solve</code> (1 unit)</p>
+  </section>
+
+  <!-- L2 -->
+  <section id="l2" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L2</span>
+      <h2>Fixed XOR</h2>
+      <span class="chip">set1::l002</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">XOR two equal-length buffers, byte for byte. Both are given in hex: <code>1c01…181c</code> and <code>6869…7965</code>. Produce the result.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>Decode both to bytes and XOR them positionally: <code>a[i] ^ b[i]</code>. XOR is its own inverse and is commutative, which is exactly why it is the workhorse of ciphers. The result is a <code>Vec&lt;u8&gt;</code>; hex is just how the test prints it.</p>
+    <div class="insight"><span class="tag">Core move</span><p>One expression: <code>a.iter().zip(b).map(|(&amp;x, &amp;y)| x ^ y)</code>. The only failure mode is a length mismatch.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::hex;
+use crate::util::xor;
+
+pub fn solve(a_hex: &amp;str, b_hex: &amp;str) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let a = hex::from_hex(a_hex)?;
+    let b = hex::from_hex(b_hex)?;
+    xor::xor(&amp;a, &amp;b)
+}</code></pre></div>
+    <details class="support">
+      <summary>supporting code · util/xor.rs — xor</summary>
+      <div class="body">
+        <div class="code-wrap"><pre><code>pub fn xor(a: &amp;[u8], b: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    if a.len() != b.len() {
+        return Err(CpalError::LengthMismatch { a: a.len(), b: b.len() });
+    }
+    Ok(a.iter().zip(b).map(|(&amp;x, &amp;y)| x ^ y).collect())
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">byte 0</span><code>0x1c ^ 0x68 = 0x74 = "t"</code></div>
+      <div class="ex-row"><span class="ex-k">byte 1</span><code>0x01 ^ 0x69 = 0x68 = "h"</code></div>
+      <div class="ex-row out"><span class="ex-k">full result</span><code>"the kid didn't play"  →  746865206b696420646f6e277420706c6179</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">a</span><code>1c0111001f010100061a024b53535009181c</code></div>
+      <div class="io-row"><span class="io-k in">b</span><code>686974207468652062756c6c277320657965</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>746865206b696420646f6e277420706c6179</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l002.rs</code><span class="sep">·</span> helper <code>util/xor.rs</code><span class="sep">·</span> test: <code>mod solve</code> (1 unit)</p>
+  </section>
+
+  <!-- L3 -->
+  <section id="l3" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L3</span>
+      <h2>Single-byte XOR</h2>
+      <span class="chip">set1::l003</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">The message has been XOR'd against a single character. Decrypt it. You'll know you've succeeded when the plaintext reads like meaningful English. The ciphertext is given in hex: <code>1b37…3736</code>.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>With a single repeated key byte you only have to test 256 candidates. Decrypt against each candidate, score the result for English-likeness, and keep the best. Scoring is <code>util::freq::english_score</code> — a weighted count of lowercase letters and spaces using relative English letter frequencies. Real English is letter-dense, so true plaintext scores far above a wrongly de-keyed (mostly high-bit) buffer. <code>best_single_byte_key</code> runs all 256 and returns the argmax.</p>
+    <div class="insight"><span class="tag">Core move</span><p>For every <code>k</code> from <code>0…255</code> compute <code>score(ct ^ k)</code>; the winner is the key. <code>best_single_byte_key</code> hides the loop.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::err::CpalError;
+use crate::util::freq;
+use crate::util::hex;
+
+pub fn solve(cipher_hex: &amp;str) -&gt; Result&lt;(u8, Vec&lt;u8&gt;), CpalError&gt; {
+    let ct = hex::from_hex(cipher_hex)?;
+    let (key, plain) = freq::best_single_byte_key(&amp;ct);
+    Ok((key, plain))
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>best_single_byte_key</code> never errors — it always returns the argmax — so the only <code>CpalError</code> path here is the hex decode.</li>
+      <li><code>key</code> is the byte and <code>plain</code> the decrypted <code>Vec&lt;u8&gt;</code>; the test asserts the exact plaintext.</li>
+    </ul>
+    <details class="support">
+      <summary>supporting code · util/freq.rs — english_score + best_single_byte_key</summary>
+      <div class="body">
+        <div class="code-wrap"><pre><code>pub fn english_score(data: &amp;[u8]) -&gt; u32 {
+    const FREQ: [u32; 26] = [
+        8, 1, 3, 5, 12, 2, 2, 5, 7, 1, 1, 4, 2, 7, 9, 2, 1, 6, 9, 10, 4, 1, 1, 2, 2, 1,
+    ];
+    let mut total = 0u32;
+    for &amp;b in data {
+        match b {
+            b'a'..=b'z' =&gt; total += FREQ[(b - b'a') as usize],
+            b' ' =&gt; total += 15,
+            _ =&gt; {}
+        }
+    }
+    total
+}
+
+pub fn best_single_byte_key(ciphertext: &amp;[u8]) -&gt; (u8, Vec&lt;u8&gt;) {
+    let mut best_key = 0u8;
+    let mut best_plain = ciphertext.to_vec();
+    let mut best_score = english_score(ciphertext);
+    for key in 1..=u8::MAX {
+        let plain: Vec&lt;u8&gt; = ciphertext.iter().map(|&amp;b| b ^ key).collect();
+        let score = english_score(&amp;plain);
+        if score &gt; best_score {
+            (best_key, best_plain, best_score) = (key, plain, score);
+        }
+    }
+    (best_key, best_plain)
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">winning key</span><code>0x58  (= 88  =  "X")</code></div>
+      <div class="ex-row"><span class="ex-k">first bytes</span><code>0x1b^0x58 = 0x43 "C" · 0x37^0x58 = 0x6f "o" · 0x37^0x58 = 0x6f "o"</code></div>
+      <div class="ex-row out"><span class="ex-k">full result</span><code>"Cooking MC's like a pound of bacon"</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input (hex)</span><code>1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>"Cooking MC's like a pound of bacon"</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l003.rs</code><span class="sep">·</span> helpers <code>util/hex.rs</code>, <code>util/freq.rs</code><span class="sep">·</span> tests: <code>mod solve</code> (unit + property oracle)</p>
+  </section>
+
+  <!-- L4 -->
+  <section id="l4" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L4</span>
+      <h2>Detect single-byte XOR</h2>
+      <span class="chip">set1::l004</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Write a function that takes a <em>hex string</em> (with one "single-char-xored" English line buried in it) and detects the line by brute-forcing all 256 characters on every line. There are no obvious boundaries between words, so don't worry about that here.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>Feed the exact L3 attack to <em>every</em> line, keep each line's best-decryption score <code>english_score</code>, and return the argmax line. The planted English line scores far above random noise no matter where it sits — <code>util::freq::best_single_byte_key</code> + <code>english_score</code> (both shown in L3) do the per-line work.</p>
+    <div class="insight"><span class="tag">Core move</span><p><code>for (i, line)</code> accumulate <code>(i, key, plain, score)</code>; keep the largest <code>score</code>. Exact ties are broken by "first" (later lines only replace on a strict <code>&gt;</code>).</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::err::CpalError;
+use crate::util::freq;
+use crate::util::hex;
+
+pub fn solve(lines: &amp;[&amp;str]) -&gt; Result&lt;(usize, u8, Vec&lt;u8&gt;), CpalError&gt; {
+    let mut best: Option&lt;(usize, u8, Vec&lt;u8&gt;, u32)&gt; = None;
+
+    for (i, line) in lines.iter().enumerate() {
+        let ct = hex::from_hex(line)?;
+        let (key, plain) = freq::best_single_byte_key(&amp;ct);
+        let score = freq::english_score(&amp;plain);
+        if best.as_ref().is_none_or(|b| score &gt; b.3) {
+            best = Some((i, key, plain, score));
+        }
+    }
+
+    match best {
+        Some((i, key, plain, _)) =&gt; Ok((i, key, plain)),
+        None =&gt; Err(CpalError::NoLines),
+    }
+}</code></pre></div>
+    <ul class="notes">
+      <li>The four-tuple carries <code>(index, key, plain, score)</code>; <code>score</code> is the discriminator and <code>index</code> the answer. <code>|b| score &gt; b.3</code> reaches the score field.</li>
+      <li><code>None</code> input is <code>NoLines</code>; an invalid hex digit on any line is surfaced by the hex decode.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">winning line</span><code>index 170  (0-based)  ·  key 0x35</code></div>
+      <div class="ex-row"><span class="ex-k">first bytes</span><code>0x7b^0x35 = 0x4e "N" · 0x5a^0x35 = 0x6f "o" · 0x42^0x35 = 0x77 "w"</code></div>
+      <div class="ex-row out"><span class="ex-k">full result</span><code>"Now that the party is jumping"</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input (dump)</span><code>data/challenge_04.txt · the planted line is row 170 (0-based): 7b5a4215415d544115415d5015455447414c155c46155f4058455c5b523f</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>key 0x35 · "Now that the party is jumping"</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l004.rs</code><span class="sep">·</span> helpers <code>util/hex.rs</code>, <code>util/freq.rs</code><span class="sep">·</span> tests: <code>mod solve</code> (3 unit + 1 property) + data file</p>
+  </section>
+
+  <!-- L5 -->
+  <section id="l5" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L5</span>
+      <h2>Repeating-key XOR</h2>
+      <span class="chip">set1::l005</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">XOR the following plaintext against the repeating key <code>494345</code>. It's a little long, but I expect you can do it without much trouble:</p>
+      <p class="official"><code>4275726e696e672027656d2c…</code>  ("Burning 'em, if you ain't quick and nimble&nbsp;\n&nbsp;I go crazy when I hear a cymbal")</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>L2's XOR is fixed-length; L5 generalizes it: cycle the key back to the start, so byte <code>i</code> of the plaintext meets key byte <code>i % key.len()</code>. This is the repeating-key XOR that L6's ciphertext was made with. The key <code>494345</code> decodes to <code>"ICE"</code> — but the code only sees three bytes.</p>
+    <div class="insight"><span class="tag">Core move</span><p><code>xor::xore</code>: <code>b ^ key[i % len]</code> for every byte <code>i</code>. One <code>%</code> is the whole trick; an empty key is the only error.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::err::CpalError;
+use crate::util::hex;
+use crate::util::xor;
+
+pub fn solve(plain_hex: &amp;str, key_hex: &amp;str) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let plain = hex::from_hex(plain_hex)?;
+    let key = hex::from_hex(key_hex)?;
+    xor::xore(&amp;plain, &amp;key)
+}</code></pre></div>
+    <details class="support">
+      <summary>supporting code · util/xor.rs — xore</summary>
+      <div class="body">
+        <p>Unlike <code>xor</code> (equal-length), the key repeats as far as needed to cover <code>plain</code>.</p>
+        <div class="code-wrap"><pre><code>pub fn xore(plain: &amp;[u8], key: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    if key.is_empty() {
+        return Err(CpalError::EmptyKey);
+    }
+    let len = key.len();
+    Ok(plain
+        .iter()
+        .enumerate()
+        .map(|(i, &amp;b)| b ^ key[i % len])
+        .collect())
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">key</span><code>0x494345  =  "ICE"</code></div>
+      <div class="ex-row"><span class="ex-k">first 3 bytes</span><code>0x42^0x49 = 0x0b · 0x75^0x43 = 0x36 · 0x72^0x45 = 0x37</code></div>
+      <div class="ex-row out"><span class="ex-k">full result (head)</span><code>0b3637 272a 2b2e …   "Bur"&nbsp;→&nbsp;ct starts 0b 36 37</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">plaintext (hex)</span><code>4275726e696e672027656d2c20696620796f752061696e277420717569636b20616e64206e696d626c650a4920676f206372617a79207768656e2049206865617220612063796d62616c</code></div>
+      <div class="io-row"><span class="io-k in">key (hex)</span><code>494345</code></div>
+      <div class="io-row"><span class="io-k out">ciphertext (hex)</span><code>0b3637272a2b2e63622c2e69692a23693a2a3c6324202d623d63343c2a26226324272765272a282b2f20430a652e2c652a3124333a653e2b2027630c692b20283165286326302e27282f</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l005.rs</code><span class="sep">·</span> helpers <code>util/hex.rs</code>, <code>util/xor.rs</code><span class="sep">·</span> tests: <code>mod solve</code> (2 unit) + 2 doc tests in <code>util::xor</code></p>
+  </section>
+
+  <!-- L6 -->
+  <section id="l6" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L6</span>
+      <h2>Break repeating-key XOR</h2>
+      <span class="chip">set1::l006</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Base64 the below before you start. Remember that the user's key was a repeating phrase, so if you can't get a reasonable plaintext, try different key lengths in the next step. Decrypt it!</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>Two questions: <em>how long is the key?</em> and <em>what is each byte of it?</em>. For the first, note that at the true key length the ciphertext splits into clean "columns" — column <code>c</code> holds plaintext bytes that all met key byte <code>c</code>, so each column is mostly English and has <em>low</em> normalized entropy. At any wrong length the columns interleave several key positions and spread out → higher entropy. <code>key_length</code> searches <code>2…MAX_KEY_LEN</code> and takes the candidate whose <em>weighted mean column entropy</em> is smallest. Once the length is known, each column is just a single-byte XOR problem, so <code>best_single_byte_key</code> (L3) recovers one key byte at a time.</p>
+    <div class="insight"><span class="tag">Core move</span><p>(1) minimize mean normalized entropy over column splits to find <code>key_len</code>; (2) per-column <code>best_single_byte_key</code>; (3) <code>xor::xore</code> to decrypt. Entropy is the length discriminator; frequency is the byte discriminator.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::b64;
+use crate::util::entropy;
+use crate::util::err::CpalError;
+use crate::util::freq;
+use crate::util::xor;
+
+const MAX_KEY_LEN: usize = 48;
+
+pub fn solve(ciphertext: &amp;str) -&gt; Result&lt;(Vec&lt;u8&gt;, Vec&lt;u8&gt;), CpalError&gt; {
+    let ct = b64::b64_decode(ciphertext)?;
+    if ct.len() &lt; 2 {
+        return Err(CpalError::CiphertextTooShort(ct.len()));
+    }
+
+    let key_len = key_length(&amp;ct);
+    let key: Vec&lt;u8&gt; = (0..key_len)
+        .map(|col| {
+            let column = column_of(&amp;ct, col, key_len);
+            freq::best_single_byte_key(&amp;column).0
+        })
+        .collect();
+    let plaintext =
+        xor::xore(&amp;ct, &amp;key).expect("key length is at least two, so the key is non-empty");
+    Ok((key, plaintext))
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>MAX_KEY_LEN = 48</code>: long enough to exceed this level's key length (29) so the minimum-entropy split is unambiguous; it is also capped at <code>ct.len()</code>.</li>
+      <li>The <code>xore</code> is called with <code>.expect</code> — safe because <code>key_length</code> returns ≥ 2, so the key can't be empty. A 1-byte input trips <code>CiphertextTooShort</code> earlier.</li>
+    </ul>
+    <details class="support">
+      <summary>supporting code · l006.rs — private key-length helpers</summary>
+      <div class="body">
+        <div class="code-wrap"><pre><code>fn key_length(ct: &amp;[u8]) -&gt; usize {
+    let upper = MAX_KEY_LEN.min(ct.len());
+    (2..=upper)
+        .map(|l| (l, column_entropy(ct, l)))
+        .min_by(|a, b| a.1.partial_cmp(&amp;b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(l, _)| l)
+        .unwrap_or(2)
+}
+
+fn column_entropy(ct: &amp;[u8], l: usize) -&gt; f64 {
+    let total = ct.len() as f64;
+    (0..l)
+        .map(|col| {
+            let column = column_of(ct, col, l);
+            (column.len() as f64 / total) * entropy::normalized_shannon_entropy(&amp;column)
+        })
+        .sum()
+}
+
+fn column_of(ct: &amp;[u8], col: usize, step: usize) -&gt; Vec&lt;u8&gt; {
+    ct.iter().skip(col).step_by(step).copied().collect()
+}</code></pre></div>
+        <p><code>column_entropy</code> weights each column by its share of bytes (<code>len/total</code>) so short trailing columns don't dominate — comparing across key lengths means the score must be length-independent.</p>
+      </div>
+    </details>
+    <details class="support">
+      <summary>supporting code · util/entropy.rs — normalized_shannon_entropy</summary>
+      <div class="body">
+        <p>Byte histogram → Shannon entropy, normalized by dividing by <code>log2(256) = 8</code> so the result is in <code>[0, 1]</code>. 0.0 for a single repeated byte, 1.0 for a perfectly uniform distribution of all 256 values.</p>
+        <div class="code-wrap"><pre><code>pub fn normalized_shannon_entropy(data: &amp;[u8]) -&gt; f64 {
+    let n = data.len() as f64;
+    if n == 0.0 {
+        return 0.0;
+    }
+
+    let mut counts = [0usize; 256];
+    for &amp;b in data {
+        counts[b as usize] += 1;
+    }
+
+    let mut h = 0.0;
+    for &amp;c in &amp;counts {
+        let c = c as f64;
+        if c &gt; 0.0 {
+            let p = c / n;
+            h -= p * p.log2();
+        }
+    }
+    h / 8.0 // log2(256): the maximum entropy a byte value distribution can carry.
+}</code></pre></div>
+      </div>
+    </details>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">recovered key length</span><code>29</code></div>
+      <div class="ex-row"><span class="ex-k">first key byte</span><code>key[0] = 0x54 "T" · plain[0] = 0x49 "I" · ct[0] = 0x1d   (base64 head "HUIf…")</code></div>
+      <div class="ex-row out"><span class="ex-k">full key</span><code>"Terminator X: Bring the noise"</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input (b64)</span><code>data/challenge_06.txt · head: HUIfTQsPAh9PE048GmllH0kcDk4TAQsHThsBFkU2AB4BSWQgVB0dQzNTTmVS…</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>key "Terminator X: Bring the noise"  (29 bytes) · plaintext head "I'm back and I'm ringin' the bell that dawns a new day!"</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l006.rs</code><span class="sep">·</span> helpers <code>util/b64.rs</code>, <code>util/entropy.rs</code>, <code>util/freq.rs</code>, <code>util/xor.rs</code><span class="sep">·</span> tests: <code>mod solve</code> (3 unit + 1 property) + data file</p>
+  </section>
+
+  <!-- L7 -->
+  <section id="l7" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L7</span>
+      <h2>AES-128 in ECB mode</h2>
+      <span class="chip">set1::l007</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Decrypt the following base64-encoded file with AES-128 in ECB mode with the key <strong>"YELLOW SUBMARINE"</strong> (hex: <code>59454c4c4f57205355424d4152494e45</code>).</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>ECB is the block mode that keeps no state: every 16-byte block is encrypted/decrypted <em>independently</em> and in place. So "decrypt the file" is just "decrypt the back-to-back blocks and concat". The <code>aes</code> crate provides AES-128 as a block primitive; this level's <code>solve</code> is only the block-walk and the two preconditions (length is a multiple of 16, and the key is exactly 16 bytes).</p>
+    <div class="insight"><span class="tag">Core move</span><p>AES is stateless at the block level (that's <code>ECB</code>): chunk the ciphertext into 16-byte blocks, feed each through <code>BlockDecrypt::decrypt_block</code>, and collect. No IV, no chaining, no padding — the payload is already block-aligned.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use aes::cipher::BlockDecrypt;
+use aes::cipher::KeyInit;
+use aes::Aes128;
+use generic_array::GenericArray;
+
+use crate::util::b64;
+use crate::util::err::CpalError;
+
+const AES_BLOCK_SIZE: usize = 16;
+
+pub fn solve(encrypted_b64: &amp;str, key: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let ct = b64::b64_decode(encrypted_b64)?;
+    if ct.len() % AES_BLOCK_SIZE != 0 {
+        return Err(CpalError::CiphertextNotBlockAligned(ct.len()));
+    }
+    if key.len() != AES_BLOCK_SIZE {
+        return Err(CpalError::InvalidKeyLength(key.len()));
+    }
+
+    let cipher = Aes128::new_from_slice(key).map_err(|_| CpalError::InvalidKeyLength(key.len()))?;
+
+    let mut out = Vec::with_capacity(ct.len());
+    for chunk in ct.chunks_exact(AES_BLOCK_SIZE) {
+        let mut block = GenericArray::clone_from_slice(chunk);
+        cipher.decrypt_block(&amp;mut block);
+        out.extend_from_slice(block.as_slice());
+    }
+    Ok(out)
+}</code></pre></div>
+    <ul class="notes">
+      <li>Pulled from <code>aes</code> crate + the re-export of its <code>BlockDecrypt</code> trait and <code>generic_array</code> 16-byte wrapper — the only external dependency in this crate.</li>
+      <li>Two explicit preconditions: ciphertext length is a multiple of 16, key is exactly 16 bytes. Both are <code>CpalError</code>s.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">known vector</span><code>FIPS-197 A.1: key 000102…0f · ct 69c4e0d8… · → plain 00 11 22 … ff</code></div>
+      <div class="ex-row out"><span class="ex-k">official</span><code>key "YELLOW SUBMARINE" · b64 head "CRIwqt…6828" · → "I'm back and I'm ringin' the bell…"</code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input (b64)</span><code>data/challenge_07.txt · head: CRIwqt4+szDbqkNY+I0qbDe3LQz0wiw0SuxBQtAM5TDdMbjCMD/venUDW9BL…</code></div>
+      <div class="io-row"><span class="io-k in">key</span><code>"YELLOW SUBMARINE"  (16 bytes)</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>"I'm back and I'm ringin' the bell that dawns a new day!"  (same plaintext as L6)</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l007.rs</code><span class="sep">·</span> helpers <code>util/b64.rs</code> + <strong>crate <code>aes</code></strong> (AES block primitive) + <code>generic-array</code><span class="sep">·</span> tests: <code>mod solve</code> (4 unit + 1 property, incl. the FIPS-197 A.1 vector) + data file</p>
+  </section>
+
+  <!-- L8 -->
+  <section id="l8" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L8</span>
+      <h2>Detect AES in ECB mode</h2>
+      <span class="chip">set1::l008</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Here's some data at 0x800/546e6b6a6463666d6c626765/08-ecb.txt. Find the lines that contain AES in ECB mode.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>ECB is deterministic and stateless, so <em>an identical 16-byte plaintext block always yields the identical 16-byte ciphertext block</em>. A file of "random-looking" ciphertext under CBC essentially never repeats a block — but an ECB file will, the moment the plaintext has two identical 16-byte spans. So the detector is: for each hex line, split into 16-byte chunks, and flag the line if any chunk appears more than once. A <code>HashSet</code> makes the "has it been seen already?" check <code>O(1)</code>.</p>
+    <div class="insight"><span class="tag">Core move</span><p><code>for block in ct.chunks_exact(16)</code> → if <code>!seen.insert(block)</code> we already had this block → return its line index. That's it. This is the first place L7's ECB assumption pays off in a detection test.</p></div>
+
+    <h3>The code</h3>
+    <div class="code-wrap"><pre><code>use crate::util::err::CpalError;
+use crate::util::hex;
+
+const BLOCK_SIZE: usize = 16;
+
+pub fn solve(lines: &amp;[&amp;str]) -&gt; Result&lt;usize, CpalError&gt; {
+    if lines.is_empty() {
+        return Err(CpalError::NoLines);
+    }
+    for (i, line) in lines.iter().enumerate() {
+        let ct = hex::from_hex(line)?;
+        if has_repeated_block(&amp;ct) {
+            return Ok(i);
+        }
+    }
+    Err(CpalError::NoRepeatedBlock)
+}
+
+/// True when any 16-byte block of `ct` occurs two or more times.
+fn has_repeated_block(ct: &amp;[u8]) -&gt; bool {
+    let mut seen = std::collections::HashSet::new();
+    for block in ct.chunks_exact(BLOCK_SIZE) {
+        if !seen.insert(block) {
+            return true;
+        }
+    }
+    false
+}</code></pre></div>
+    <ul class="notes">
+      <li><code>chunks_exact</code> is silent on a ragged trailing chunk — a line not a multiple of 16 is treated as "no repeat in the full blocks", which is safe detection-wise.</li>
+      <li>First line carrying a repeat wins; <code>NoRepeatedBlock</code> only fires when none do.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">flagged line</span><code>index 132  (0-based)</code></div>
+      <div class="ex-row"><span class="ex-k">repeating block</span><code>08649af70dc06f4fd5d2d69c744cd283   (blocks 1, 3, 5, 7 of that line)</code></div>
+      <div class="ex-row out"><span class="ex-k">uniqueness</span><code>only line 132 of challenge_08.txt carries a repeat; the <code>solve</code> test asserts the whole dump flags exactly <code>[132]</code></code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>data/challenge_08.txt · multiple hex lines, each a ciphertext</code></div>
+      <div class="io-row"><span class="io-k out">output</span><code>idx 132 · repeated block <code>08649af70dc06f4f…</code> at blocks 1,3,5,7 of that line</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set1/l008.rs</code><span class="sep">·</span> helper <code>util/hex.rs</code><span class="sep">·</span> tests: <code>mod solve</code> (3 unit, incl. the "flagged set is unique" oracle + 1 property) + data file</p>
+  </section>
+
+  <footer>
+    <p class="kicker">Source</p>
+    <p>One Rust crate. The library is <code>src/lib.rs</code> — just <code>pub mod sets</code> and <code>pub mod util</code>. Each level is a small module under <code>src/sets/set1/</code>, <code>src/sets/set2/</code>, <code>src/sets/set3/</code> or <code>src/sets/set4/</code> exposing a <code>solve</code> function and a <code>#[cfg(test)]</code> module with its own tests (unit and proptest property oracles). Shared primitives live in <code>src/util/</code>. The official challenge payloads ship under <code>data/challenge_04.txt</code>, <code>data/challenge_06.txt</code>, <code>data/challenge_07.txt</code>, <code>data/challenge_08.txt</code> and <code>data/challenge_10.txt</code>. Re-run everything — format, tests and clippy — with <code>just gate</code>.</p>
+  </footer>
+  </main>
+
+</div>
+
+<script src="docs.js" defer></script>
+</body>
+</html>

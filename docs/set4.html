@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Annotated walkthrough of Cryptopals Set 4 (L25–L26), wired to the actual Rust code in the qwencryptopals repo.">
+<meta name="color-scheme" content="dark">
+<title>Set 4, Levels L25–L26 · qwencryptopals</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–4</small></div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 231 unit + 41 doc tests</div>
+</div>
+
+<header class="hero">
+  <p class="kicker">Cryptopals · Set 4 · Stream ciphers</p>
+  <h1>Set 4, Levels L25–L26</h1>
+  <p class="lead">
+    Each level pairs a challenge with the <strong>actual Rust code</strong> in this repo:
+    the idea, the solver, a worked example with real values, and the official Cryptopals
+    input/output. The reading guide and the error-type appendix live on the <a href="index.html">index</a>.
+  </p>
+</header>
+
+<div class="grid">
+  <nav class="toc" aria-label="Table of contents">
+    <p class="toc-title">Contents</p>
+    <ul class="toc-list">
+      <li><a href="index.html"><span class="n">←</span>Index</a></li>
+      <li class="set-head" aria-hidden="true">Set 4 · Stream ciphers</li>
+      <li><a href="#l25" data-toc><span class="n">L25</span>Random-access CTR</a></li>
+      <li><a href="#l26" data-toc><span class="n">L26</span>CTR bit-flipping</a></li>
+      <li><a href="index.html#errors"><span class="n">#</span>Error type</a></li>
+    </ul>
+  </nav>
+
+  <main>
+
+  <!-- L25 -->
+  <section id="l25" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L25</span>
+      <h2>Break "random access read/write" AES CTR</h2>
+      <span class="chip">set4::l001</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">Back to CTR. Encrypt the recovered plaintext from <a href="set2.html#l12">L12</a> (the ECB exercise) under CTR with a random key that is unknown to you, but that you hold on to. Now, write the code that lets you "seek" into the ciphertext, decrypt, and re-encrypt with different plaintext. Expose this as a function, like, <code>edit(ciphertext, key, offset, newtext)</code>. Imagine the "edit" function was exposed to attackers by means of an API call that did not reveal the key or the original plaintext; the attacker has the ciphertext and controls the offset and the "new text". Recover the original plaintext.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>The seek is the trap. The CTR keystream is a pure function of the key and the counter (<a href="set3.html#l18">L18</a>'s layout: 8-byte nonce, 8-byte little-endian block count), so byte N of the stream can be generated without walking from the start. Every call to <code>edit</code> produces the same keystream, and a single full-length zero edit at offset 0 hands the caller the raw stream: <code>0 ^ KS = KS</code>. The attacker already holds <code>C = P ^ KS</code>, so one byte-wise XOR gives P, the entire original plaintext, in a single oracle call, with the key never in sight. The challenge's food-for-thought variant is the same hole dressed up for disk encryption: a "seek" that can overwrite arbitrary plaintext at arbitrary positions is a keystream-leak machine.</p>
+    <div class="insight"><span class="tag">Core move</span><p>One full-length zero edit leaks the entire keystream, and <code>C ^ KS = P</code> reads the plaintext back in its entirety. One oracle call, key never in sight: the "random access read/write" primitive is the attack surface, not the cipher.</p></div>
+
+    <h3>The code</h3>
+    <p>The level module is two functions; the keystream they build on is <a href="set3.html#l18"><code>util/ctr</code></a>.</p>
+    <div class="code-wrap"><pre><code>pub fn edit(ct: &amp;[u8], key: &amp;[u8], offset: usize, newtext: &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let plain = ctr::ctr(ct, key, NONCE)?;
+
+    if offset.checked_add(newtext.len()) &gt; Some(ct.len()) {
+        return Err(CpalError::CiphertextTooShort(offset));
+    }
+
+    let mut spliced = plain;
+    spliced.splice(offset..offset + newtext.len(), newtext.iter().copied());
+    Ok(ctr::ctr(&amp;spliced, key, NONCE)?)
+}</code></pre></div>
+    <div class="code-wrap"><pre><code>pub fn solve(
+    ct: &amp;[u8],
+    edit: &amp;dyn Fn(usize, &amp;[u8]) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt;,
+) -&gt; Result&lt;Vec&lt;u8&gt;, CpalError&gt; {
+    let keystream = edit(0, &amp;vec![0u8; ct.len()])?;
+    if keystream.len() != ct.len() {
+        return Err(CpalError::LengthMismatch {
+            a: ct.len(),
+            b: keystream.len(),
+        });
+    }
+    xor::xor(ct, &amp;keystream)
+}</code></pre></div>
+    <ul class="notes">
+      <li>The plaintext is what <a href="set2.html#l12">L12</a> recovered: 138 bytes, starting "Rollin' in my 5.0". <code>KEY</code> is a fixed 16-byte constant and <code>NONCE</code> is 0, only so the vectors are reproducible, the way <a href="set3.html#l17">L17</a> fixes its cookie key; in the challenge the key is unknown to the attacker, which is exactly what the attack exploits.</li>
+      <li>No new <code>CpalError</code> variant: a splice past the end reuses <code>CiphertextTooShort</code> (carrying the offending offset), a misaligned oracle answer reuses <code>LengthMismatch</code>, and a non-16-byte key reuses <code>InvalidKeyLength</code> from <code>ctr</code>.</li>
+      <li><code>edit</code> is decrypt, splice, re-encrypt: CTR is involutive (<a href="set3.html#l18">L18</a>), the re-encrypt reuses the same keystream, and every byte outside the splice comes back bit-identical.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>The service encrypts L12's 138-byte secret under the fixed KEY with NONCE 0, and one full-length zero edit leaks the keystream. The splice itself is visible too: writing <code>qwerty</code> at offset 7 turns bytes 7..13 from <code>20696e20 6d79</code> (" in my") into <code>b5bd304a 10b5</code>, while every other byte is untouched.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">cipher</span><code>ctr(&amp;secret, &amp;KEY, NONCE)<span class="muted"> → 138 bytes, starting c04485cd 8b0dfee4: the service's ciphertext</span></code></div>
+      <div class="ex-row"><span class="ex-k">leak</span><code>edit(&amp;ct, &amp;KEY, 0, zeros)<span class="muted"> → the raw keystream, starting 922be9a1 e263d9c4: 0 ^ KS is the keystream itself</span></code></div>
+      <div class="ex-row out"><span class="ex-k">solve</span><code>ct ^ keystream<span class="muted"> → the 138-byte secret, starting 526f6c6c 696e2720 ("Rollin' "): the entire plaintext in one call, key never in sight</span></code></div>
+    </div>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>L12's recovered 138-byte secret, re-encrypted under CTR (the service KEY, NONCE 0); the attacker's only handle is the <code>edit</code> oracle</code></div>
+      <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>(ct, edit) → the 138-byte secret, starting <code>526f6c6c 696e2720</code>; the tests pin the raw-keystream leak, the splice at offset 7 with <code>qwerty</code>, the end-of-slice and key-length rejections, the no-op end edit, and two properties: any 1–256-byte secret round-trips, and <code>edit</code> is exactly splice-then-CTR</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set4/l001.rs</code><span class="sep">·</span> helpers: <code>util/ctr</code> (<code>ctr</code>) · <code>util/xor</code> (<code>xor</code>) · <code>set2/l004</code> (the secret) — <em>no new error variant, no data file</em><span class="sep">·</span> tests: <code>mod solve</code> in <code>set4/l001.rs</code> (7 unit: the L12-secret round-trip, the raw-keystream leak, the splice boundary, the end rejection, the key-length rejection, the empty document, the no-op end edit · 2 properties: any secret round-trips, edit = splice-then-CTR) · doctests: <code>edit</code>, <code>solve</code></p>
+  </section>
+
+  <!-- L26 -->
+  <section id="l26" class="challenge">
+    <div class="ch-top">
+      <span class="ch-num">L26</span>
+      <h2>CTR bit-flipping</h2>
+      <span class="chip">set4::l002</span>
+    </div>
+
+    <div class="card problem">
+      <span class="card-label">The problem · official</span>
+      <p class="official">There are people in the world that believe that CTR resists bit-flipping attacks of the kind to which CBC mode is susceptible. Re-implement <a href="set2.html#l16">the CBC bit-flip exercise</a> to use CTR mode instead of CBC mode. Inject an "admin=true" token.</p>
+    </div>
+
+    <h3>The idea</h3>
+    <p>CBC's bit-flip (<a href="set2.html#l16">L16</a>) corrupts one ciphertext byte and lets the chained decrypt scramble the next block. CTR has no chain to corrupt: each plaintext byte is just its ciphertext byte XORed with one keystream byte, <code>P[i] = C[i] ^ K[i]</code>. So the move is not to flip a bit but to <em>write</em> one. With the key and counter fixed, the keystream is a fixed function of the two, and one known <code>(P, C)</code> pair recovers it byte-for-byte: <code>K[i] = P[i] ^ C[i]</code>. The attacker already knows the whole plaintext (the public delimiters plus their own input) and already holds the ciphertext. Over the one fully-known 16-byte block they compute <code>K[i]</code> and rewrite <code>C'[i] = K[i] ^ P'[i]</code> so the block decodes to <code>input ++ ";admin=true;"</code>. Every byte outside that block stays bit-identical, so the rest of the profile still decodes cleanly and the check door finds the injected token.</p>
+    <div class="insight"><span class="tag">Core move</span><p>CTR trades the CBC flip for a <em>random access write</em>: one known pair leaks the keystream over a 16-byte window, and that window is the attacker's free variable. Rewrite it to decode to the token, touch nothing else, and the front door's escaping never gets a chance.</p></div>
+
+    <h3>The code</h3>
+    <p>The level module is the CTR twin of <a href="set2.html#l16">L16</a>: a fixed, hidden AES-128 key, a fixed public counter, two doors that sandwich input between public delimiters, and the rewrite. The keystream comes from <a href="set3.html#l18"><code>util/ctr</code></a>.</p>
+    <div class="code-wrap"><pre><code>pub fn forge() -&gt; Vec&lt;u8&gt; {
+    let input = "AAAA"; // 4 bytes: the range = input ++ first 12 suffix bytes
+    let mut ct = encryption_oracle(input);
+    let plain = build_plain(input);
+
+    let mut target: [u8; BLOCK] = [0u8; BLOCK];
+    target[..input.len()].copy_from_slice(input.as_bytes());
+    target[input.len()..].copy_from_slice(TARGET.as_bytes());
+
+    for (j, _) in target.iter().enumerate() {
+        let i = RANGE + j;
+        let keystream = plain[i] ^ ct[i]; // K[i], from the one known pair
+        ct[i] = keystream ^ target[j]; // C'[i] = K[i] ^ P'[i]
+    }
+    ct
+}</code></pre></div>
+    <div class="code-wrap"><pre><code>pub fn solve() -&gt; bool {
+    is_admin(&amp;forge())
+}</code></pre></div>
+    <ul class="notes">
+      <li>The service is the CTR twin of <a href="set2.html#l16">L16</a>: it holds a fixed, hidden AES-128 <code>KEY</code> and a fixed public counter <code>NONCE</code> (L18's layout), and the encrypt door wraps input between two public delimiters, escaping any <code>;</code> or <code>=</code> so no input can form the literal token. The check door decrypts and looks for <code>";admin=true;"</code>.</li>
+      <li>No new <code>CpalError</code> variant: the check door is a <code>bool</code>, and a CTR failure (which CTR, being a stream, never produces) simply reports <code>false</code>. No <code>Result</code>, no padding.</li>
+      <li><code>solve</code> is the two lines that run the whole attack: forge, then ask the check door. The doctest pins <code>solve() == true</code>.</li>
+    </ul>
+
+    <h3>Worked example</h3>
+    <p>With input "AAAA", the fully-known range is bytes 32..48: the four input bytes plus the first twelve of the public suffix. The keystream leaks from the one known pair, and the rewrite flips only that block.</p>
+    <div class="ex">
+      <div class="ex-row"><span class="ex-k">cipher</span><code>ctr(P, &amp;KEY, NONCE)<span class="muted"> → the 78-byte ciphertext, bytes 32..48 = 7fc4a018 768dccb2 f891f15e 51831d4f : the honest profile</span></code></div>
+      <div class="ex-row"><span class="ex-k">leak</span><code>K[i] = P[i] ^ C[i] over 32..48<span class="muted"> → 3e85e159 4deea3df 95f49f2a 63be387d : the raw keystream of the one known block</span></code></div>
+      <div class="ex-row out"><span class="ex-k">forge</span><code>C'[i] = K[i] ^ "AAAA;admin=true;"<span class="muted"> → bytes 32..48 = 7fc4a018 768fc7b2 fc9aa25e 11cb5d46 ; the first 4 are unchanged, the rest decode to the token</span></code></div>
+    </div>
+    <p>Every byte outside 32..48 is bit-identical to the honest ciphertext, so the check door's decrypt yields a valid profile containing ";admin=true;".</p>
+
+    <h3>Official I/O</h3>
+    <div class="io">
+      <div class="io-row"><span class="io-k in">input</span><code>the service's ciphertext of PREFIX ++ "AAAA" ++ SUFFIX under the fixed KEY, NONCE 0; the attacker holds the ciphertext and knows the entire plaintext (public delimiters + own input)</code></div>
+      <div class="io-row out"><span class="io-k out">output</span><code><span class="solve">solve</span>() → true: the forged ciphertext decrypts to a profile containing ";admin=true;"; the tests pin the honest reject, the forged pass, the forged-range decode, the front-door inject attempts, the range-only-touch invariant, the determinism, and one property: no ";"/"="-free input ever surfaces the token</code></div>
+    </div>
+    <p class="files"><strong>Files</strong> <code>src/sets/set4/l002.rs</code><span class="sep">·</span> helpers: <code>util/ctr</code> (<code>ctr</code>)<span class="sep">·</span> <em>no new error variant, no data file</em><span class="sep">·</span> tests: <code>mod bitflip</code> in <code>set4/l002.rs</code> (6 unit: the honest reject, the forged pass, the forged-range decode, the front-door inject attempt, the range-only-touch, the determinism · 1 property: no ";"/"="-free input ever surfaces the target) · doctests: <code>encryption_oracle</code>, <code>is_admin</code>, <code>solve</code></p>
+  </section>
+
+  <footer>
+    <p class="kicker">Source</p>
+    <p>One Rust crate. The library is <code>src/lib.rs</code> — just <code>pub mod sets</code> and <code>pub mod util</code>. Each level is a small module under <code>src/sets/set1/</code>, <code>src/sets/set2/</code>, <code>src/sets/set3/</code> or <code>src/sets/set4/</code> exposing a <code>solve</code> function and a <code>#[cfg(test)]</code> module with its own tests (unit and proptest property oracles). Shared primitives live in <code>src/util/</code>. The official challenge payloads ship under <code>data/challenge_04.txt</code>, <code>data/challenge_06.txt</code>, <code>data/challenge_07.txt</code>, <code>data/challenge_08.txt</code> and <code>data/challenge_10.txt</code>. Re-run everything — format, tests and clippy — with <code>just gate</code>.</p>
+  </footer>
+  </main>
+
+</div>
+
+<script src="docs.js" defer></script>
+</body>
+</html>

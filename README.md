@@ -89,5 +89,8 @@ data/
   challenge_04.txt, challenge_06.txt, challenge_07.txt, challenge_08.txt,
   challenge_10.txt   official Cryptopals payloads read by their test modules
 docs/
-  index.html         self-contained HTML walkthrough of Sets 1–4, Levels L1–L26
+  index.html         landing page: reading guide, building blocks, error type appendix, set links
+  set1.html…set4.html   one page per set, Levels L1–L26, wired to the code
+  style.css          shared chrome, extracted from the old single-page inline style
+  docs.js            shared scroll-spy + copy-button behavior
 ```
