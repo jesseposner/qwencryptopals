@@ -61,7 +61,7 @@ src/
     err.rs             CpalError
     hex.rs             from_hex (decode)
     b64.rs             b64_encode / b64_decode
-    aes.rs             aes::ecb_encrypt / aes::ecb_decrypt (AES-128-ECB, hand-rolled repeat)
+    aes.rs             aes::ecb_encrypt / aes::ecb_decrypt (AES-128-ECB, crate core, hand-rolled block loop)
     cbc.rs             cbc::decrypt / cbc::encrypt (AES-128-CBC, hand-rolled chain)
     ctr.rs             ctr::ctr (AES-128-CTR; involutive) + shared_keystream / recover (fixed-nonce reuse)
     pad.rs             pkcs7_pad / pkcs7_unpad
