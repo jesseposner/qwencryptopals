@@ -199,7 +199,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
 
 <div class="topbar">
   <div class="brand"><span class="dot" aria-hidden="true"></span> qwencryptopals <small>· Sets 1–4</small></div>
-  <div class="run"><b>just gate</b> = fmt + test + clippy · 230 unit + 41 doc tests</div>
+  <div class="run"><b>just gate</b> = fmt + test + clippy · 231 unit + 41 doc tests</div>
 </div>
 
 <header class="hero">
@@ -213,7 +213,7 @@ footer .kicker{font-family:var(--mono);font-size:11.5px;letter-spacing:.12em;tex
   </p>
   <div class="pills">
     <span class="pill g"><b>26</b> levels</span>
-    <span class="pill"><b>230</b> unit + <b>41</b> doc tests</span>
+    <span class="pill"><b>231</b> unit + <b>41</b> doc tests</span>
     <span class="pill">incl. property-based (proptest)</span>
     <span class="pill">11 shared <b>util</b> modules</span>
     <span class="pill">L7 adds the <b>aes</b> crate</span>
@@ -1546,7 +1546,7 @@ pub fn is_admin(ct: &amp;[u8]) -&gt; bool {
       <div class="io-row"><span class="io-k in">input</span><code>your four-byte string <span class="muted">"AAAA"</span>, sanitized and wrapped between the public delimiters</code></div>
       <div class="io-row"><span class="io-k out">output</span><code><span class="solve">solve()</span> → <span class="muted">true</span>; the honest ciphertext fails the check, and the forged block decodes to <span class="muted">"AAAA;admin=true;"</span></code></div>
     </div>
-    <p class="files"><strong>Files</strong> <code>src/sets/set2/l008.rs</code><span class="sep">·</span> helpers: <code>util/cbc</code> (<code>encrypt</code>, <code>decrypt</code>) · <code>util/pad</code> (<code>pkcs7_pad</code>, <code>pkcs7_unpad</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>mod bitflip</code> (6 unit, incl. the byte-exact block assertion) · doctests: <code>is_admin</code>, <code>solve</code></p>
+    <p class="files"><strong>Files</strong> <code>src/sets/set2/l008.rs</code><span class="sep">·</span> helpers: <code>util/cbc</code> (<code>encrypt</code>, <code>decrypt</code>) · <code>util/pad</code> (<code>pkcs7_pad</code>, <code>pkcs7_unpad</code>) — <em>no new error variant</em><span class="sep">·</span> tests: <code>mod bitflip</code> (6 unit, incl. the byte-exact block assertion · 1 property: no arbitrary input ever surfaces the target via the front door) · doctests: <code>is_admin</code>, <code>solve</code></p>
   </section>
 
   <!-- L17 -->

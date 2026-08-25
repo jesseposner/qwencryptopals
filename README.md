@@ -28,7 +28,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 Or, if you have [just](https://github.com/casey/just), `just gate` runs the three
 in sequence (it's the default recipe). Others: `just test`, `just test-fuzz`,
 `just lvl set1 l003`, `just lint`, `just fmt`, `just doc` — or `just -l` for the
-full list. The suite is **230 unit + 41 doc tests** and growing one level at a time.
+full list. The suite is **231 unit + 41 doc tests** and growing one level at a time.
 
 `proptest` is a **dev-only** dependency used for property tests; it never ships in the crate.
 

@@ -119,6 +119,7 @@ pub fn solve() -> bool {
 #[cfg(test)]
 mod bitflip {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn the_honest_ciphertext_is_rejected() {
@@ -154,5 +155,15 @@ mod bitflip {
     #[test]
     fn the_forge_is_deterministic() {
         assert_eq!(forge(), forge());
+    }
+
+    proptest! {
+        #[test]
+        fn the_front_door_never_surfaces_the_target_token(input in any::<String>()) {
+            // Escaping `;` and `=` means user input can never contribute a literal `;` or `=` to
+            // the plaintext, and the fixed delimiters cannot form the token on their own, so the
+            // front door rejects the target whatever the input, honest or not.
+            prop_assert!(!is_admin(&encryption_oracle(&input)));
+        }
     }
 }
