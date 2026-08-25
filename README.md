@@ -10,7 +10,7 @@ helpers (`util/aes`, `util/cbc`, `util/ctr`). **Set 2, Challenge 11** (the ECB/C
 detection oracle) adds a single runtime dependency, [`rand`](https://docs.rs/rand),
 to draw the oracle's random key, prefix/suffix and mode.
 
-Helpers are added **just-in-time** — only when a level actually needs one. No pre-stubbing.
+Helpers are added **just-in-time**, only when a level actually needs one. No pre-stubbing.
 
 **Purpose.** This repo exists to evaluate **Qwen3.8-27B NVFP4**, which implements each
 challenge level. `qwencryptopals` is the project brand (*Qwen* + *cryptopals*); `cryptopals`
@@ -28,7 +28,7 @@ cargo clippy --all-targets --all-features --locked -- -D warnings
 
 Or, if you have [just](https://github.com/casey/just), `just gate` runs the three
 in sequence (it's the default recipe). Others: `just test`, `just test-fuzz`,
-`just lvl set1 l003`, `just lint`, `just fmt`, `just doc` — or `just -l` for the
+`just lvl set1 l003`, `just lint`, `just fmt`, `just doc`, or `just -l` for the
 full list. The suite is **231 unit + 41 doc tests** and growing one level at a time.
 
 `proptest` is a **dev-only** dependency used for property tests; it never ships in the crate.
@@ -42,7 +42,7 @@ full list. The suite is **231 unit + 41 doc tests** and growing one level at a t
 - **`util` helpers just-in-time.** A helper (`xor`, `ctr`, …) is introduced only
   when a level needs it.
 - **One module per level** under `sets/<setN>/lNN.rs` with a public `solve`.
-- **Errors** are a hand-grown, `thiserror`-derived `CpalError`; variants added just-in-time.
+- **Errors** are a hand-rolled, `thiserror`-derived `CpalError`; variants added just-in-time.
 - **Docs enforced**: a crate-level `#![deny(missing_docs)]` means every public item is
   documented.
 - **Properties over examples** where they're stronger:
